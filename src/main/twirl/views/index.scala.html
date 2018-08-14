@@ -1,0 +1,16 @@
+@(user: Option[String])
+
+@main("Welcome to Play") {
+    <h1>Welcome to Play!</h1>
+    <div>
+        Logged in as: @user.getOrElse("Anonymous")
+    </div>
+    <div>
+        <a href="@routes.HomeController.login">
+            Login
+        </a>
+        <a href="@routes.HomeController.logout">
+            Logout
+        </a>
+    </div>
+}
