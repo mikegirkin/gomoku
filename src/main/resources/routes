@@ -4,11 +4,15 @@
 # ~~~~
 
 # An example controller showing a sample home page
-GET     /                           controllers.HomeController.index
-GET     /auth/login                 controllers.HomeController.login
-GET     /auth/logout                controllers.HomeController.logout
-GET     /auth/google                controllers.HomeController.googleAuth
-GET     /auth/googlecallback        controllers.HomeController.googleCallback
+GET     /                           net.girkin.gomoku.HomeController.index
+GET     /auth/login                 net.girkin.gomoku.HomeController.login
+GET     /auth/logout                net.girkin.gomoku.HomeController.logout
+GET     /auth/google                net.girkin.gomoku.HomeController.googleAuth
+GET     /auth/googlecallback        net.girkin.gomoku.HomeController.googleCallback
+
+GET     /test                       net.girkin.gomoku.HomeController.test
+
+GET     /game                       net.girkin.gomoku.GameController.index
 
 # Map static resources from the /public folder to the /assets URL path
 GET     /assets/*file               controllers.Assets.versioned(path="/public", file: Asset)

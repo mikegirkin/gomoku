@@ -17,6 +17,11 @@ val http4sVersion = "0.18.15"
 
 libraryDependencies ++= Seq(
   guice,
+  jdbc,
+
+  "org.playframework.anorm" %% "anorm"      % "2.6.2",
+  "org.postgresql"           % "postgresql" % "42.2.4",
+
   "org.http4s"             %% "http4s-dsl"          % http4sVersion,
   "org.http4s"             %% "http4s-blaze-client" % http4sVersion,
   "org.http4s"             %% "http4s-blaze-server" % http4sVersion,
@@ -25,7 +30,8 @@ libraryDependencies ++= Seq(
   "io.circe"      %% "circe-generic"         % "0.9.3",
   "io.circe"      %% "circe-literal"         % "0.9.3",
   "io.circe"      %% "circe-generic-extras"  % "0.9.3",
-  "com.pauldijou" %% "jwt-circe"       % "0.17.0",
+  "io.circe"      %% "circe-java8"           % "0.9.3",
+  "com.pauldijou" %% "jwt-circe"             % "0.17.0",
 
   "org.scalatestplus.play" %% "scalatestplus-play"  % "3.1.2" % Test
 )
