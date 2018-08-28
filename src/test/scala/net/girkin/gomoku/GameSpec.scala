@@ -2,9 +2,6 @@ package net.girkin.gomoku
 
 import java.util.UUID
 
-import cats.data.State
-import net.girkin.gomoku
-import net.girkin.gomoku.PlayerNumber.{First, Second}
 import org.scalatest.{Inside, Inspectors, Matchers, WordSpec}
 
 class GameSpec extends WordSpec
@@ -14,38 +11,34 @@ class GameSpec extends WordSpec
     val game = Game.create(7, 5, 5)
 
     "be initialized properly after creation" in {
-      game.users shouldBe empty
+      game.players shouldBe empty
       game.field.height shouldBe 7
       game.field.width shouldBe 5
       game.status shouldBe WaitingForUsers
     }
 
     val user1 = UUID.randomUUID()
-    val gameWithOneUser = game.addUser(user1)
+    val gameWithOneUser = game.addPlayer(user1)
 
     "be able to handle addition of the first user" in {
       gameWithOneUser.status shouldBe WaitingForUsers
-      gameWithOneUser.users shouldBe List(user1)
+      gameWithOneUser.players shouldBe List(user1)
     }
 
     val user2 = UUID.randomUUID()
-    val gameWithUsers = gameWithOneUser.addUser(user2)
+    val gameWithUsers = gameWithOneUser.addPlayer(user2)
 
     "be able to handle addition of the second user" in {
       gameWithUsers.status shouldBe Active(PlayerNumber.First)
-      gameWithUsers.users shouldBe List(user1, user2)
+      gameWithUsers.players shouldBe List(user1, user2)
     }
 
     val move1 = MoveAttempt(2, 2, user1)
-    val gameAfterMove1 = gameWithUsers.makeMove(move1)
+    val gameAfterMove1 = gameWithUsers.makeMove(move1).right.get
 
     "be able to handle correct moves" in {
-      inside(gameAfterMove1) {
-        case Right(g) =>
-          g.status shouldBe Active(PlayerNumber.Second)
-          g.field.get(2, 2) shouldBe Some(PlayerNumber.First)
-
-      }
+      gameAfterMove1.status shouldBe Active(PlayerNumber.Second)
+      gameAfterMove1.field.get(2, 2) shouldBe Some(PlayerNumber.First)
     }
 
     "be able to handle incorrect moves" in {
@@ -53,7 +46,7 @@ class GameSpec extends WordSpec
         (gameWithOneUser, MoveAttempt(2, 5, user1), GameNotStarted),
         (gameWithUsers, MoveAttempt(-1, 2, user2), ImpossibleMove("smth")),
         (gameWithUsers, MoveAttempt(2, 2, user2), ImpossibleMove("smth")),
-        (gameAfterMove1.right.get, MoveAttempt(2, 3, user1), ImpossibleMove("smth"))
+        (gameAfterMove1, MoveAttempt(2, 3, user1), ImpossibleMove("smth"))
       )
 
       forAll(testSet) {
@@ -64,22 +57,24 @@ class GameSpec extends WordSpec
       }
     }
 
+    val userQuitGame = gameAfterMove1.removePlayer(user2)
+
     "sets the correct state when one of the players leave before finish" in {
-      pending
+      userQuitGame.status shouldBe Finished(PlayerQuit(PlayerNumber.Second))
+    }
+
+    "prevents removing player from inactive game" in {
+      userQuitGame.removePlayer(user2) shouldBe userQuitGame
     }
   }
 
   "Game winner logic" should {
-    val game = Game.create(5, 5, 3)
-    "be able to figure out the end of the game" when {
-      "when the field is empty" in {
-        game.winner() shouldBe None
-      }
-    }
 
     val firstUser = UUID.randomUUID()
     val secondUser = UUID.randomUUID()
-    val gameWithUsers = game.addUser(firstUser).addUser(secondUser)
+    val gameWithUsers = Game.create(5, 5, 3)
+      .addPlayer(firstUser)
+      .addPlayer(secondUser)
 
     val moveTests =
       List(
@@ -89,7 +84,7 @@ class GameSpec extends WordSpec
           MoveAttempt(1, 1, firstUser),
           MoveAttempt(1, 2, secondUser),
           MoveAttempt(2, 2, firstUser)
-        ),
+        ) -> PlayerNumber.First,
         List(
           MoveAttempt(0, 0, firstUser),
           MoveAttempt(1, 1, secondUser),
@@ -97,23 +92,21 @@ class GameSpec extends WordSpec
           MoveAttempt(2, 2, secondUser),
           MoveAttempt(0, 4, firstUser),
           MoveAttempt(3, 3, secondUser)
-        )
+        ) -> PlayerNumber.Second
       )
 
-    forAll(moveTests) { moves =>
-      val lastMove = moves.last
 
-      val gameAfterMoves = moves.take(moves.size - 1).foldLeft(gameWithUsers)((game, move) => game.makeMove(move).right.get)
+    "be able to figure out the end of the game " in {
 
-      "the game shouldn't be finished when it is not" in {
-        gameAfterMoves.winner() shouldBe None
+      forAll(moveTests) { moves =>
+        val finishedGame = moves._1.foldLeft(gameWithUsers) { (game, move) =>
+          game.status shouldBe a[Active]
+          game.makeMove(move).right.get
+        }
+
+        finishedGame.status shouldBe Finished(PlayerWon(moves._2))
       }
 
-      val finishedGame = gameAfterMoves.makeMove(lastMove).right.get
-
-      "the game should be finished after last move" in {
-        finishedGame.winner() shouldBe Some(PlayerNumber.First)
-      }
     }
   }
 }

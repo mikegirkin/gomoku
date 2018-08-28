@@ -19,10 +19,15 @@ object PlayerNumber {
   }
 }
 
+trait GameFinishReason
+case class PlayerQuit(playerNumber: PlayerNumber) extends GameFinishReason
+case object Draw extends GameFinishReason
+case class PlayerWon(playerNumber: PlayerNumber) extends GameFinishReason
+
 sealed trait GameStatus
 case object WaitingForUsers extends GameStatus
 case class Active(awaitingMoveFrom: PlayerNumber) extends GameStatus
-case object Finished extends GameStatus
+case class Finished(reason: GameFinishReason) extends GameStatus
 
 case class GameField(
   height: Int,
@@ -46,16 +51,26 @@ object GameField {
 
 case class Game(
   gameId: UUID,
-  users: List[UUID],
+  players: List[UUID],
   status: GameStatus,
   winningCondition: Int,
   field: GameField
 ) {
-  def addUser(user: UUID): Game = {
-    if(users.isEmpty) {
-      this.copy(users = user :: users)
-    } else if(users.size == 1) {
-      this.copy(users = List(users.head, user), status = Active(PlayerNumber.First))
+  def addPlayer(user: UUID): Game = {
+    if(players.isEmpty) {
+      this.copy(players = user :: players)
+    } else if(players.size == 1) {
+      this.copy(players = List(players.head, user), status = Active(PlayerNumber.First))
+    } else {
+      this
+    }
+  }
+
+  def removePlayer(userId: UUID): Game = {
+    if (!this.status.isInstanceOf[Active]) {
+      this
+    } else if(players.contains(userId)) {
+      this.copy(status = Finished(PlayerQuit(getPlayerNumber(userId))))
     } else {
       this
     }
@@ -72,8 +87,8 @@ case class Game(
     } else {
       this.status match {
         case WaitingForUsers => Some(GameNotStarted)
-        case Finished => Some(GameFinished)
-        case Active(userNumber) if users(userNumber.asInt) != move.userId =>
+        case Finished(_) => Some(GameFinished)
+        case Active(userNumber) if players(userNumber.asInt) != move.userId =>
           Some(ImpossibleMove("Wrong user"))
         case _ => None
       }
@@ -81,7 +96,7 @@ case class Game(
   }
 
   def getPlayerNumber(userId: UUID): PlayerNumber = {
-    if(users(0) == userId) PlayerNumber.First
+    if(players(0) == userId) PlayerNumber.First
     else PlayerNumber.Second
   }
 
@@ -92,17 +107,22 @@ case class Game(
         field = this.field.update(move.row, move.column, Some(currentUserNumber)),
         status = Active(currentUserNumber.other)
       )
+    }.map { game =>
+      game.winner() match {
+        case Some(winner) => game.copy(status = Finished(PlayerWon(winner)))
+        case _ => game
+      }
     }
   }
 
-  def hasCompleteLineStartingAt(row: Int, col: Int, length: Int, delta: (Int, Int)): Boolean = {
+  private def hasCompleteLineStartingAt(row: Int, col: Int, length: Int, delta: (Int, Int)): Boolean = {
     if(
       row + delta._1 * (length - 1) >= field.width ||
       col + delta._2 * (length - 1) >= field.height
     ) false
     else {
       Range(0, length).map { index =>
-        (delta._1 * index, delta._2 * index)
+        (row + delta._1 * index, col + delta._2 * index)
       }.map {
         case (r, c) => field.get(r, c)
       }.reduce[Option[PlayerNumber]] {
@@ -112,7 +132,7 @@ case class Game(
     }
   }
 
-  def winner(): Option[PlayerNumber] = {
+  private def winner(): Option[PlayerNumber] = {
     val horizontal = (1, 0)
     val vertical = (0, 1)
     val diagonal = (1, 1)
@@ -159,7 +179,7 @@ class GomokuGame(
 
   def addUser(game: Game, user: UUID): IO[Game] = {
     gameService.save(
-      game.addUser(user)
+      game.addPlayer(user)
     )
   }
 
