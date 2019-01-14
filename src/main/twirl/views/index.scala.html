@@ -6,13 +6,13 @@
         Logged in as: @user.getOrElse("Anonymous")
     </div>
     <div>
-        Go to <a href="@net.girkin.gomoku.routes.GameController.index()">game</a>
+        Go to <a href="/">game</a>
     </div>
     <div>
-        <a href="@net.girkin.gomoku.routes.HomeController.login">
+        <a href="/auth/login">
             Login
         </a>
-        <a href="@net.girkin.gomoku.routes.HomeController.logout">
+        <a href="/auth/logout">
             Logout
         </a>
     </div>

@@ -1,8 +1,10 @@
-package net.girkin.gomoku
+package net.girkin.gomoku.game
 
 import java.util.UUID
 
 import cats.effect.IO
+
+
 
 sealed trait PlayerNumber {
   def asInt: Int
@@ -32,7 +34,7 @@ case class Finished(reason: GameFinishReason) extends GameStatus
 case class GameField(
   height: Int,
   width: Int,
-  private val state: Vector[Vector[Option[PlayerNumber]]]
+  state: Vector[Vector[Option[PlayerNumber]]]
 ) {
 
   def get(row: Int, col: Int): Option[PlayerNumber] = state(row)(col)
@@ -103,15 +105,19 @@ case class Game(
   def makeMove(move: MoveAttempt): Either[MoveError, Game] = {
     isMoveWrong(move).toLeft {
       val currentUserNumber = getPlayerNumber(move.userId)
-        this.copy(
-        field = this.field.update(move.row, move.column, Some(currentUserNumber)),
-        status = Active(currentUserNumber.other)
-      )
-    }.map { game =>
-      game.winner() match {
-        case Some(winner) => game.copy(status = Finished(PlayerWon(winner)))
-        case _ => game
+      val newFieldState = this.field.update(move.row, move.column, Some(currentUserNumber))
+      val gameWithUpdatedField = this.copy(field = newFieldState)
+      val newStatus: GameStatus = gameWithUpdatedField.winner() match {
+        case Some(winner) => Finished(PlayerWon(winner))
+        case None => if(gameWithUpdatedField.isDraw()) {
+          Finished(Draw)
+        } else {
+          Active(currentUserNumber.other)
+        }
       }
+      gameWithUpdatedField.copy(
+        status = newStatus
+      )
     }
   }
 
@@ -145,6 +151,14 @@ case class Game(
     } yield winner
 
     winner.headOption
+  }
+
+  private def isDraw(): Boolean = {
+    (for {
+      r <- Range(0, field.height)
+      c <- Range(0, field.width) if field.get(r, c).isEmpty
+    } yield (r, c)).headOption.isEmpty &&
+    winner().isEmpty
   }
 }
 

@@ -1,0 +1,9 @@
+* Building and running
+
+* TODOS:
+** TODO configure webpack
+** TODO Join game
+*** User logs in 
+*** User clicks button "Join random game"
+*** User is put into the list of the joined users for the given game
+*** If the game got 2 users it is not returned as "waiting for users" anymore

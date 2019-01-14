@@ -2,10 +2,17 @@ package net.girkin.gomoku
 
 import java.util.UUID
 
+import cats._
+import cats.implicits._
+import net.girkin.gomoku.game._
 import org.scalatest.{Inside, Inspectors, Matchers, WordSpec}
+
 
 class GameSpec extends WordSpec
   with Matchers with Inside with Inspectors {
+
+  val firstUser = UUID.randomUUID()
+  val secondUser = UUID.randomUUID()
 
   "Game" should {
     val game = Game.create(7, 5, 5)
@@ -17,23 +24,21 @@ class GameSpec extends WordSpec
       game.status shouldBe WaitingForUsers
     }
 
-    val user1 = UUID.randomUUID()
-    val gameWithOneUser = game.addPlayer(user1)
+    val gameWithOneUser = game.addPlayer(firstUser)
 
     "be able to handle addition of the first user" in {
       gameWithOneUser.status shouldBe WaitingForUsers
-      gameWithOneUser.players shouldBe List(user1)
+      gameWithOneUser.players shouldBe List(firstUser)
     }
 
-    val user2 = UUID.randomUUID()
-    val gameWithUsers = gameWithOneUser.addPlayer(user2)
+    val gameWithUsers = gameWithOneUser.addPlayer(secondUser)
 
     "be able to handle addition of the second user" in {
       gameWithUsers.status shouldBe Active(PlayerNumber.First)
-      gameWithUsers.players shouldBe List(user1, user2)
+      gameWithUsers.players shouldBe List(firstUser, secondUser)
     }
 
-    val move1 = MoveAttempt(2, 2, user1)
+    val move1 = MoveAttempt(2, 2, firstUser)
     val gameAfterMove1 = gameWithUsers.makeMove(move1).right.get
 
     "be able to handle correct moves" in {
@@ -43,10 +48,10 @@ class GameSpec extends WordSpec
 
     "be able to handle incorrect moves" in {
       val testSet = List[(Game, MoveAttempt, MoveError)](
-        (gameWithOneUser, MoveAttempt(2, 5, user1), GameNotStarted),
-        (gameWithUsers, MoveAttempt(-1, 2, user2), ImpossibleMove("smth")),
-        (gameWithUsers, MoveAttempt(2, 2, user2), ImpossibleMove("smth")),
-        (gameAfterMove1, MoveAttempt(2, 3, user1), ImpossibleMove("smth"))
+        (gameWithOneUser, MoveAttempt(2, 5, firstUser), GameNotStarted),
+        (gameWithUsers, MoveAttempt(-1, 2, secondUser), ImpossibleMove("smth")),
+        (gameWithUsers, MoveAttempt(2, 2, secondUser), ImpossibleMove("smth")),
+        (gameAfterMove1, MoveAttempt(2, 3, firstUser), ImpossibleMove("smth"))
       )
 
       forAll(testSet) {
@@ -57,21 +62,18 @@ class GameSpec extends WordSpec
       }
     }
 
-    val userQuitGame = gameAfterMove1.removePlayer(user2)
+    val userQuitGame = gameAfterMove1.removePlayer(secondUser)
 
     "sets the correct state when one of the players leave before finish" in {
       userQuitGame.status shouldBe Finished(PlayerQuit(PlayerNumber.Second))
     }
 
     "prevents removing player from inactive game" in {
-      userQuitGame.removePlayer(user2) shouldBe userQuitGame
+      userQuitGame.removePlayer(secondUser) shouldBe userQuitGame
     }
   }
 
   "Game winner logic" should {
-
-    val firstUser = UUID.randomUUID()
-    val secondUser = UUID.randomUUID()
     val gameWithUsers = Game.create(5, 5, 3)
       .addPlayer(firstUser)
       .addPlayer(secondUser)
@@ -96,17 +98,51 @@ class GameSpec extends WordSpec
       )
 
 
+
     "be able to figure out the end of the game " in {
 
       forAll(moveTests) { moves =>
-        val finishedGame = moves._1.foldLeft(gameWithUsers) { (game, move) =>
+        val finishedGame = Foldable[List].foldM(moves._1, gameWithUsers)( (game, move) => {
           game.status shouldBe a[Active]
-          game.makeMove(move).right.get
-        }
+          game.makeMove(move)
+        })
 
-        finishedGame.status shouldBe Finished(PlayerWon(moves._2))
+        finishedGame.right.get.status shouldBe Finished(PlayerWon(moves._2))
       }
 
+    }
+
+    "be able to figure out draw situation" in {
+      val gameWithUsers = Game.create(3, 3, 3)
+        .addPlayer(firstUser)
+        .addPlayer(secondUser)
+
+      /*
+      XOX
+      XOX
+      OXO
+     */
+      val moves = List(
+        (0, 0),
+        (1, 1),
+        (2, 1),
+        (2, 0),
+        (0, 2),
+        (0, 1),
+        (1, 2),
+        (2, 2),
+        (1, 0)
+      ).zipWithIndex.map {
+        case ((row, column), index) =>
+          MoveAttempt(row, column, if(index % 2 == 0) firstUser else secondUser)
+      }
+
+      val finishedGame = Foldable[List].foldM(moves, gameWithUsers)( (game, move) => {
+        game.status shouldBe a[Active]
+        game.makeMove(move)
+      })
+
+      finishedGame.right.get.status shouldBe Finished(Draw)
     }
   }
 }

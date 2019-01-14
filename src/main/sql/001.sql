@@ -7,7 +7,9 @@ create table users (
 create table games (
   id UUID primary key,
   created_at timestamp not null,
-  users UUID array[2] references users(id),
+  user_1 UUID references users(id),
+  user_2 UUID references users(id),
+  winning_condition integer not null,
   status varchar not null
 );
 

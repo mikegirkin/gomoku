@@ -1,10 +1,9 @@
 package controllers
 
-import net.girkin.gomoku.HomeController
-import org.scalatestplus.play._
-import org.scalatestplus.play.guice._
-import play.api.test._
-import play.api.test.Helpers._
+import cats.effect.IO
+import fs2.async.Ref
+import net.girkin.gomoku.game.{Game, InmemGameStore}
+import org.scalatest.WordSpec
 
 /**
  * Add your spec here.
@@ -12,13 +11,11 @@ import play.api.test.Helpers._
  *
  * For more information, see https://www.playframework.com/documentation/latest/ScalaTestingWithScalaTest
  */
-class HomeControllerSpec extends PlaySpec with GuiceOneAppPerTest with Injecting {
+class HomeControllerSpec extends WordSpec {
 
-
+  implicit val ec = scala.concurrent.ExecutionContext.global
 
 //  "HomeController GET" should {
-//
-//
 //
 //    "render the index page from a new instance of controller" in {
 //      val controller = new HomeController(
@@ -53,3 +50,4 @@ class HomeControllerSpec extends PlaySpec with GuiceOneAppPerTest with Injecting
 //    }
 //  }
 }
+

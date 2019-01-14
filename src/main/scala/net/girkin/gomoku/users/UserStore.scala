@@ -6,7 +6,7 @@ import java.util.UUID
 import anorm.Macro.ColumnNaming
 import cats.effect.IO
 import javax.inject.Inject
-import play.api.db.Database
+import net.girkin.gomoku.Database
 
 case class User(
   id: UUID,
@@ -31,14 +31,14 @@ class PsqlAnormUserStore @Inject() (
     email: String
   ): IO[Option[User]] = IO {
     db.withConnection { implicit cn =>
-      SQL"select * from net.girkin.gomoku.users where email=$email".as(userParser.singleOpt)
+      SQL"select * from users where email=$email".as(userParser.singleOpt)
     }
   }
 
   override def upsert(user: User): IO[Unit] = IO {
     db.withConnection { implicit cn =>
       SQL"""
-        insert into net.girkin.gomoku.users (id, email, created_at)
+        insert into users (id, email, created_at)
         values (${user.id}::uuid, ${user.email}, ${user.createdAt})
         on conflict(id) do nothing
       """.executeInsert(anorm.SqlParser.scalar[java.util.UUID].singleOpt)
