@@ -34,14 +34,17 @@ object Services {
   def gameService[F[_]: Effect](
     ref: Ref[F, List[Game]],
     executionContext: ExecutionContext
-  ) =
+  ) = {
+    val gameStore = new InmemGameStore[F](ref)
     new GameService[F](
       authService[F](),
       new GameServerImpl[F](
-        new InmemGameStore[F](ref)
+        gameStore
       ),
+      gameStore,
       executionContext
     ).service
+  }
 
   def authService[F[_]: Effect]() = {
     new Auth[F]()
@@ -72,12 +75,14 @@ object ServerStream {
         gameService = Services.gameService(ref, ec)
         authService = Services.authService[F]()
         googleAuthService = Services.googleAuthService(userStore, client)
+        staticService = new StaticService[F]()
       } yield {
         BlazeBuilder[F]
           .bindHttp(Constants.port, "0.0.0.0")
           .mountService(gameService, "/")
           .mountService(googleAuthService.service, "/auth/google")
           .mountService(authService.service, "/auth")
+          .mountService(staticService.service, "/static")
           .serve
       }
 

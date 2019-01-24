@@ -1,1 +1,3 @@
-export const util_constant = 5;
+export default {
+    util_constant: 5
+};

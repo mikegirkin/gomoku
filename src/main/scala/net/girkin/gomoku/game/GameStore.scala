@@ -5,6 +5,7 @@ import java.util.UUID
 
 import anorm.Macro.ColumnNaming
 import cats.Functor
+import cats.data.OptionT
 import cats.effect.IO
 import cats.implicits._
 import fs2.async.Ref
@@ -22,6 +23,7 @@ case class GameStoreRecord(
 trait GameStore[F[_]] {
   def getGamesAwaitingPlayers(): F[Seq[Game]]
   def saveGameRecord(game: Game): F[Unit]
+  def getGame(id: UUID): OptionT[F, Game]
 }
 
 class InmemGameStore[F[_]: Functor](activeGames: Ref[F, List[Game]]) extends GameStore[F] {
@@ -42,6 +44,16 @@ class InmemGameStore[F[_]: Functor](activeGames: Ref[F, List[Game]]) extends Gam
         game :: gameList
       }
     }.void
+  }
+
+  override def getGame(id: UUID): OptionT[F, Game] = {
+    OptionT {
+      activeGames.get.map { games =>
+        games.find {
+          _.gameId == id
+        }
+      }
+    }
   }
 }
 

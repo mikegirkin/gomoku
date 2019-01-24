@@ -1,5 +1,6 @@
 'use strict'
 const path = require('path')
+const VueLoaderPlugin = require('vue-loader/lib/plugin')
 const vueLoaderConfig = require('./vue-loader.conf')
 
 function resolve (dir) {
@@ -11,12 +12,16 @@ const assetsPath = function (_path) {
 };
 
 module.exports = {
+    mode: 'development',
     context: path.resolve(__dirname, '.'),
+    plugins: [
+        new VueLoaderPlugin()
+    ],
     entry: {
-        app: './src/main/js/main.js'
+        main: './src/main/js/main.js'
     },
     output: {
-        path: path.resolve(__dirname, './public/javascripts'),
+        path: path.resolve(__dirname, './static/javascripts'),
         filename: '[name].js'
         // publicPath: process.env.NODE_ENV === 'production'
         //     ? config.build.assetsPublicPath
@@ -26,15 +31,20 @@ module.exports = {
         extensions: ['.js', '.vue', '.json'],
         alias: {
             'vue$': 'vue/dist/vue.esm.js',
-            '@': resolve('./src/main/js'),
+            '@': path.resolve(__dirname, './src/main/js'),
         }
     },
+
     module: {
         rules: [
             {
                 test: /\.vue$/,
                 loader: 'vue-loader',
-                options: vueLoaderConfig
+                //options: vueLoaderConfig
+            },
+            {
+                test: /\.css$/,
+                use: ['css-loader'],
             },
             {
                 test: /\.js$/,

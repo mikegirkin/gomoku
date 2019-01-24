@@ -27,6 +27,7 @@ class GameServiceSpec extends WordSpec
     val service = new GameService[IO](
       authService,
       new GameServerImpl[IO](store),
+      store,
       ec
     ).service
     val url = Uri.uri("/join")
@@ -85,6 +86,7 @@ class GameServiceSpec extends WordSpec
     val service: HttpService[IO] = new GameService[IO](
       authService,
       new GameServerImpl[IO](store),
+      store,
       ec
     ).anonymous
     val url = Uri.uri("/wsecho")
