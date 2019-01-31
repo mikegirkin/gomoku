@@ -4,6 +4,9 @@
         <div>
             <input type="button" value="Join game" id="joinGame" v-on:click="handleJoinRequested"/>
         </div>
+        <div>
+            <input type="button" value="Send phrase" id="sendEcho" v-on:click="handleSendEchoRequested"/>
+        </div>
     </div>
 </template>
 
@@ -17,6 +20,10 @@
             handleJoinRequested: function (e) {
                 console.log(`Join requested ${e}`);
                 gameService.sendJoinGameRequest()
+            },
+
+            handleSendEchoRequested: function (e) {
+                gameService.sendEcho("Test echo")
             }
         }
     }

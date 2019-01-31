@@ -1,7 +1,5 @@
 package net.girkin.gomoku
 
-import java.io.File
-import java.nio.file.Paths
 import java.util.UUID
 
 import cats.effect.Effect
@@ -9,17 +7,17 @@ import cats.implicits._
 import io.circe.syntax._
 import fs2._
 import fs2.async.mutable.Queue
+import net.girkin.gomoku.api.ApiObjects._
 import net.girkin.gomoku.game.{GameServer, GameStore, JoinGameSuccess}
 import org.http4s._
 import org.http4s.circe._
-import org.http4s.twirl._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.websocket.WebSocketBuilder
+import org.http4s.twirl._
 import org.http4s.websocket.WebsocketBits.{Text, WebSocketFrame}
 
 import scala.concurrent.ExecutionContext
 import scala.util.Try
-import net.girkin.gomoku.api.ApiObjects._
 
 class ArbitratyPathVar[A](cast: String => A) {
   def unapply(str: String): Option[A] =
@@ -38,13 +36,7 @@ class GameService[F[_]: Effect] (
   implicit val ec: ExecutionContext
 ) extends Http4sDsl[F] {
 
-  val anonymous = authService.authenticated(
-    AuthedService[AuthToken, F] {
-      case GET -> Root / "wsecho" as token => wsEcho(token)
-    }
-  )
-
-  val securedService = authService.secured(
+  val gameService = authService.secured(
     AuthedService[AuthUser, F] {
       case GET -> Root as token => gameApp(token)
       case GET -> Root / UUIDVar(gameId) as token => game(token, gameId)
@@ -52,7 +44,13 @@ class GameService[F[_]: Effect] (
     }
   )
 
-  val service: HttpService[F] = anonymous <+> securedService
+  val websocketService = authService.secured(
+    AuthedService[AuthUser, F] {
+      case GET -> Root / "ws" / UUIDVar(gameId) as token => wsGame(token, gameId)
+    }
+  )
+
+  val service: HttpService[F] = websocketService <+> gameService
 
   def gameApp(userToken: AuthUser): F[Response[F]] = {
     Ok(
@@ -81,7 +79,7 @@ class GameService[F[_]: Effect] (
     ).flatten
   }
 
-  def wsEcho(token: AuthToken) = {
+  def wsGame(token: AuthToken, gameId: UUID): F[Response[F]] = {
     val echoReply: Pipe[F, WebSocketFrame, WebSocketFrame] =
       _.collect {
         case Text(msg, _) => Text("You sent the server: " + msg)

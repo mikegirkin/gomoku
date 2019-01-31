@@ -5,6 +5,8 @@ const gameService = axios.create({
     baseURL: `/`
 });
 
+var conn = null;
+
 export default {
     sendJoinGameRequest: function () {
         console.log("Sending Http join game request");
@@ -17,19 +19,24 @@ export default {
 
     openWebSocketConnection: function(url) {
       console.log(`opening websocket connection ${url}`);
-      const conn = new WebSocket(url);
+      conn = new WebSocket(url);
 
       conn.onclose = function (event) {
-          console.log(`Connection closed ${event}`)
+          console.log(`Connection closed ${event.code} ${event.reason}`)
       };
 
       conn.onmessage = function (event) {
-          console.log(`Message received ${event}`)
+          console.log(`Message received ${JSON.stringify(event.data)}`)
       };
+    },
 
-      var result = conn.send("test");
-      console.log(`${result}`);
-      return conn
+    sendEcho: function(text) {
+        if(conn == null) return;
+        if(conn.readyState !== 1) {
+            console.log(`Connection is not open ${conn.readyState}`);
+            return;
+        }
+        conn.send(text);
     }
 
 }
