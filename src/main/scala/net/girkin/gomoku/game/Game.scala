@@ -4,12 +4,11 @@ import java.util.UUID
 
 import cats.effect.IO
 
-
-
 sealed trait PlayerNumber {
   def asInt: Int
   def other: PlayerNumber
 }
+
 object PlayerNumber {
   case object First extends PlayerNumber {
     override def asInt: Int = 0
@@ -30,6 +29,17 @@ sealed trait GameStatus
 case object WaitingForUsers extends GameStatus
 case class Active(awaitingMoveFrom: PlayerNumber) extends GameStatus
 case class Finished(reason: GameFinishReason) extends GameStatus
+
+trait MoveError
+case object GameNotStarted extends MoveError
+case class ImpossibleMove(reason: String) extends MoveError
+case object GameFinished extends MoveError
+
+case class MoveAttempt(
+  row: Int,
+  column: Int,
+  userId: UUID
+)
 
 case class GameField(
   height: Int,
@@ -170,36 +180,4 @@ object Game {
     winningCondition,
     GameField(height, width)
   )
-}
-
-trait MoveError
-case object GameNotStarted extends MoveError
-case class ImpossibleMove(reason: String) extends MoveError
-case object GameFinished extends MoveError
-
-case class MoveAttempt(
-  row: Int,
-  column: Int,
-  userId: UUID
-)
-
-class GomokuGame(
-  gameService: GameService
-) {
-  def create(height: Int, width: Int, winningCondition: Int): IO[Game] = {
-    val game = Game.create(height, width, winningCondition)
-    gameService.save(game)
-  }
-
-  def addUser(game: Game, user: UUID): IO[Game] = {
-    gameService.save(
-      game.addPlayer(user)
-    )
-  }
-
-  def makeMove(game: Game, moveAttempt: MoveAttempt): IO[Either[MoveError, Game]] = ???
-}
-
-trait GameService {
-  def save(game: Game): IO[Game]
 }
