@@ -15,7 +15,7 @@ import org.http4s.websocket.WebsocketBits.{Text, WebSocketFrame}
 import scala.concurrent.ExecutionContext
 
 class GameService[F[_]: Effect] (
-  authService: AuthService[F],
+  authService: Auth[F],
   gameServer: GameServer[F],
   implicit val ec: ExecutionContext
 ) extends Http4sDsl[F] {
@@ -33,9 +33,9 @@ class GameService[F[_]: Effect] (
     }
   )
 
-  val service: HttpService[F] = anonymous orElse securedService
+  val service: HttpService[F] = anonymous <+> securedService
 
-  def index(token: AuthUser): F[Response[F]] = Ok("ok")
+  def index(token: AuthUser): F[Response[F]] = Ok(token.toString)
 
   def joinRandomGame(token: AuthUser): F[Response[F]] = {
     gameServer.joinRandomGame(token.userId).fold[F[Response[F]]](

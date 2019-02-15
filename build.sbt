@@ -13,12 +13,13 @@ version := "1.0-SNAPSHOT"
 scalaVersion := "2.12.6"
 
 val http4sVersion = "0.18.21"
-val circeVersion = "0.9.3"
+val circeVersion = "0.11.0"
 val LogbackVersion = "1.2.3"
 
 libraryDependencies ++= Seq(
   "net.codingwell"          %% "scala-guice" % "4.2.1",
 
+  //"org.scalikejdbc"         %% "scalikejdbc"       % "3.3.2",
   "org.playframework.anorm" %% "anorm"      % "2.6.2",
   "org.postgresql"           % "postgresql" % "42.2.4",
   "com.mchange"              % "c3p0"       % "0.9.5.2",

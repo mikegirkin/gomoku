@@ -14,14 +14,14 @@ case class User(
   createdAt: LocalDateTime
 )
 
-trait UserStore {
-  def getByEmail(email: String): IO[Option[User]]
-  def upsert(user: User): IO[Unit]
+trait UserStore[Eff[_]] {
+  def getByEmail(email: String): Eff[Option[User]]
+  def upsert(user: User): Eff[Unit]
 }
 
 class PsqlAnormUserStore @Inject() (
   db: Database
-) extends UserStore {
+) extends UserStore[IO] {
 
   import anorm._
 

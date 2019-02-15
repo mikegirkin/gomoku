@@ -3,11 +3,13 @@ package controllers
 import java.time.LocalDateTime
 import java.util.UUID
 
+import cats.Id
 import cats.effect.IO
 import fs2.async.Ref
+import net.girkin.gomoku.auth.AuthPrimitives
 import net.girkin.gomoku.game._
 import net.girkin.gomoku.users.User
-import net.girkin.gomoku.{AuthService, AuthUser, GameService}
+import net.girkin.gomoku.{Auth, AuthUser, Constants, GameService}
 import org.http4s._
 import org.http4s.dsl.io._
 import org.scalatest.{Inside, MustMatchers, WordSpec}
@@ -21,7 +23,7 @@ class GameServiceSpec extends WordSpec
   "GameController 'JoinRandomGame'" should {
     val ref = Ref[IO, List[Game]](List.empty)
     val store = new InmemGameStore(ref.unsafeRunSync())
-    val authService = new AuthService[IO]
+    val authService = new Auth[IO]
     val service = new GameService[IO](
       authService,
       new GameServerImpl[IO](store),
@@ -36,7 +38,9 @@ class GameServiceSpec extends WordSpec
       .withHeaders(Headers(
         Header("X-Requested-With", "XMLHttpRequest")
       ))
-    val authenticatedRequest = joinRequest.addCookie(authService.authCookieName, authService.crypto.signToken(authToken.userId.toString, nonce))
+
+    val authPrimitives = new AuthPrimitives[Id]()
+    val authenticatedRequest = joinRequest.addCookie(Constants.authCookieName, authPrimitives.signToken(authToken))
 
 
     "return 403 when not authenticated" in {
@@ -77,7 +81,7 @@ class GameServiceSpec extends WordSpec
   "GameService 'wsEcho'" should {
     val ref = Ref[IO, List[Game]](List.empty)
     val store = new InmemGameStore(ref.unsafeRunSync())
-    val authService = new AuthService[IO]
+    val authService = new Auth[IO]
     val service: HttpService[IO] = new GameService[IO](
       authService,
       new GameServerImpl[IO](store),

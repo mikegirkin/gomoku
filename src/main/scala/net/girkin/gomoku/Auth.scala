@@ -1,12 +1,10 @@
 package net.girkin.gomoku
 
-import java.util.UUID
+import java.util.{Base64, UUID}
 
-import cats.{Applicative, ~>}
+import cats.Applicative
 import cats.data.{Kleisli, OptionT}
 import cats.effect.Effect
-import org.http4s.twirl._
-import cats.implicits._
 import io.circe.generic.semiauto._
 import io.circe.syntax._
 import net.girkin.gomoku.users.User
@@ -14,9 +12,9 @@ import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.headers.Location
 import org.http4s.server.AuthMiddleware
+import org.http4s.twirl._
 import org.http4s.util.CaseInsensitiveString
 import org.http4s.{AuthedService, HttpService, Request, Response, Uri, headers}
-import org.reactormonk.{CryptoBits, PrivateKey}
 
 sealed trait AuthToken
 case class AuthUser(userId: UUID) extends AuthToken
@@ -30,10 +28,7 @@ sealed trait AuthErr
 case object NoAuthCookie extends AuthErr
 case object CookieInvalid extends AuthErr
 
-class AuthService[F[_]: Effect] extends Http4sDsl[F]{
-  val key = PrivateKey(scala.io.Codec.toUTF8(scala.util.Random.alphanumeric.take(20).mkString("")))
-  val crypto = CryptoBits(key)
-  val authCookieName = "auth"
+class Auth[F[_]: Effect] extends Http4sDsl[F]{
 
   implicit val authErrEncoder = deriveEncoder[AuthErr]
 
@@ -49,9 +44,13 @@ class AuthService[F[_]: Effect] extends Http4sDsl[F]{
     implicitly[Applicative[F]].pure {
       for {
         header <- headers.Cookie.from(request.headers).toRight(NoAuthCookie.asInstanceOf[AuthErr])
-        cookie <- header.values.find(_.name == authCookieName).toRight(NoAuthCookie)
-        tokenStr <- crypto.validateSignedToken(cookie.content).toRight(CookieInvalid)
-        token = AuthUser(UUID.fromString(tokenStr))
+        cookie <- header.values.find(_.name == Constants.authCookieName).toRight(NoAuthCookie)
+        tokenStr <- Constants.crypto.validateSignedToken(cookie.content).toRight(CookieInvalid)
+        token = AuthUser(UUID.fromString(
+          new String(
+            Base64.getDecoder().decode(tokenStr), "utf-8"
+          )
+        ))
       } yield {
         token
       }
@@ -71,11 +70,11 @@ class AuthService[F[_]: Effect] extends Http4sDsl[F]{
           .exists { _.value == "XMLHttpRequest" }
         ) {
           Forbidden(req.authInfo.asJson)
-            .removeCookie(authCookieName)
+            .removeCookie(Constants.authCookieName)
         } else {
           SeeOther(
             Location(Uri.fromString(Constants.LoginUrl).toOption.get),
-          ).removeCookie(authCookieName)
+          ).removeCookie(Constants.authCookieName)
         }
       )
   }

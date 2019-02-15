@@ -13,8 +13,6 @@ import scala.concurrent.{ExecutionContext, Future}
 //}
 
 trait GomokuError
-object GoogleIncomingRequestParsingError extends GomokuError
-object GoogleAuthResponseIncomprehensible extends GomokuError
 
 object global {
   import io.circe._
