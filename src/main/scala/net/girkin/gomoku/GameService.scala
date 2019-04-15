@@ -2,11 +2,11 @@ package net.girkin.gomoku
 
 import java.util.UUID
 
-import cats.effect.Effect
+import cats.effect.{Concurrent, Effect}
 import cats.implicits._
 import io.circe.syntax._
 import fs2._
-import fs2.async.mutable.Queue
+import fs2.concurrent.Queue
 import net.girkin.gomoku.api.ApiObjects._
 import net.girkin.gomoku.game.{GameServer, GameStore, JoinGameSuccess}
 import org.http4s._
@@ -14,7 +14,8 @@ import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.twirl._
-import org.http4s.websocket.WebsocketBits.{Text, WebSocketFrame}
+import org.http4s.websocket.WebSocketFrame
+import org.http4s.websocket.WebSocketFrame.Text
 
 import scala.concurrent.ExecutionContext
 import scala.util.Try
@@ -29,11 +30,10 @@ class ArbitratyPathVar[A](cast: String => A) {
 
 object UUIDVar extends ArbitratyPathVar[UUID](s => UUID.fromString(s))
 
-class GameService[F[_]: Effect] (
+class GameService[F[_]: Concurrent] (
   authService: Auth[F],
   gameServer: GameServer[F],
-  gameStore: GameStore[F],
-  implicit val ec: ExecutionContext
+  gameStore: GameStore[F]
 ) extends Http4sDsl[F] {
 
   val gameService = authService.secured(
@@ -50,7 +50,7 @@ class GameService[F[_]: Effect] (
     }
   )
 
-  val service: HttpService[F] = websocketService <+> gameService
+  val service = websocketService <+> gameService
 
   def gameApp(userToken: AuthUser): F[Response[F]] = {
     Ok(

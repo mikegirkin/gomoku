@@ -7,8 +7,8 @@ import anorm.Macro.ColumnNaming
 import cats.Functor
 import cats.data.OptionT
 import cats.effect.IO
+import cats.effect.concurrent.Ref
 import cats.implicits._
-import fs2.async.Ref
 import net.girkin.gomoku.Database
 
 case class GameStoreRecord(
@@ -34,7 +34,7 @@ class InmemGameStore[F[_]: Functor](activeGames: Ref[F, List[Game]]) extends Gam
   }
 
   override def saveGameRecord(game: Game): F[Unit] = {
-    activeGames.modify { gameList =>
+    activeGames.update { gameList =>
       if(gameList.exists(_.gameId == game.gameId)) {
         gameList.map { item =>
           if (item.gameId == game.gameId) game

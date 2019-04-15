@@ -7,7 +7,7 @@ import cats._
 import cats.implicits._
 import net.girkin.gomoku.users.User
 import net.girkin.gomoku.{AuthUser, Constants}
-import org.http4s.{Cookie, Response}
+import org.http4s.{Response, ResponseCookie}
 
 import scala.concurrent.duration.Duration
 import scala.util.Random
@@ -31,7 +31,7 @@ class AuthPrimitives[F[_]: Monad] {
       signedToken <- signToken(token)
     } yield {
       resp.addCookie(
-        Cookie(
+        ResponseCookie(
           Constants.authCookieName,
           signedToken,
           path = Some("/"),

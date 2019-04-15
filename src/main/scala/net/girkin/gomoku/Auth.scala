@@ -5,10 +5,12 @@ import java.util.{Base64, UUID}
 import cats.Applicative
 import cats.data.{Kleisli, OptionT}
 import cats.effect.Effect
+import cats.implicits._
 import io.circe.generic.semiauto._
 import io.circe.syntax._
 import net.girkin.gomoku.users.User
 import org.http4s.circe._
+import org.http4s.implicits._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.headers.Location
 import org.http4s.server.AuthMiddleware
@@ -69,12 +71,15 @@ class Auth[F[_]: Effect] extends Http4sDsl[F]{
           .get(CaseInsensitiveString("X-Requested-With"))
           .exists { _.value == "XMLHttpRequest" }
         ) {
-          Forbidden(req.authInfo.asJson)
-            .removeCookie(Constants.authCookieName)
+          Forbidden(req.authInfo.asJson).map(
+            _.removeCookie(Constants.authCookieName)
+          )
         } else {
           SeeOther(
             Location(Uri.fromString(Constants.LoginUrl).toOption.get),
-          ).removeCookie(Constants.authCookieName)
+          ).map(
+            _.removeCookie(Constants.authCookieName)
+          )
         }
       )
   }

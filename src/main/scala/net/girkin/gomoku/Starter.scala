@@ -1,25 +1,27 @@
 package net.girkin.gomoku
 
-import cats.effect.{Effect, IO}
+import cats.data.{Kleisli, OptionT}
+import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, ConcurrentEffect, ContextShift, Effect, ExitCode, IO, IOApp, Resource, Timer}
 import cats.implicits._
-import fs2.StreamApp
-import fs2.async.Ref
 import net.girkin.gomoku.auth.{AuthPrimitives, GoogleAuthImpl, SecurityConfiguration}
 import net.girkin.gomoku.game.{Game, GameServerImpl, InmemGameStore}
 import net.girkin.gomoku.users.{PsqlAnormUserStore, UserStore}
+import org.http4s.{Request, Response}
 import org.http4s.client.Client
-import org.http4s.client.blaze.Http1Client
+import org.http4s.client.blaze.{BlazeClientBuilder, Http1Client}
 import org.http4s.server.blaze.BlazeBuilder
 
 import scala.concurrent.ExecutionContext
 
-object Starter extends StreamApp[IO] {
-  import scala.concurrent.ExecutionContext.Implicits.global
+object Starter extends IOApp {
 
-  def stream(args: List[String], requestShutdown: IO[Unit]) =
+
+  override def run(args: List[String]): IO[ExitCode] = {
     fs2.Stream.force(
       ServerStream.stream[IO](Services.userStore)
-    )
+    ).compile.drain.as(ExitCode.Success)
+  }
 }
 
 object Services {
@@ -31,18 +33,16 @@ object Services {
     "WluSEQw9iNB2iIabeUDOf-no"
   )
 
-  def gameService[F[_]: Effect](
-    ref: Ref[F, List[Game]],
-    executionContext: ExecutionContext
-  ) = {
+  def gameService[F[_]: ConcurrentEffect](
+    ref: Ref[F, List[Game]]
+  ):Kleisli[OptionT[F, ?], Request[F], Response[F]] = {
     val gameStore = new InmemGameStore[F](ref)
     new GameService[F](
       authService[F](),
       new GameServerImpl[F](
         gameStore
       ),
-      gameStore,
-      executionContext
+      gameStore
     ).service
   }
 
@@ -52,7 +52,7 @@ object Services {
 
   def googleAuthService[F[_]: Effect](
     userStore: UserStore[F],
-    httpClient: Client[F]
+    httpClient: Resource[F, Client[F]]
   ) =
     new GoogleAuthImpl[F](
       new AuthPrimitives[F],
@@ -64,29 +64,22 @@ object Services {
 
 object ServerStream {
 
-  def stream[F[_]: Effect](
+  def stream[F[_]: ConcurrentEffect : ContextShift : Timer](
     userStore: UserStore[F]
-  )(
-    implicit ec: ExecutionContext
-  ): F[fs2.Stream[F, StreamApp.ExitCode]] =
-    Ref[F, List[Game]](List.empty).map { ref =>
-      val result = for {
-        client <- Http1Client.stream[F]()
-        gameService = Services.gameService(ref, ec)
-        authService = Services.authService[F]()
-        googleAuthService = Services.googleAuthService(userStore, client)
-        staticService = new StaticService[F]()
-      } yield {
-        BlazeBuilder[F]
-          .bindHttp(Constants.port, "0.0.0.0")
-          .mountService(gameService, "/")
-          .mountService(googleAuthService.service, "/auth/google")
-          .mountService(authService.service, "/auth")
-          .mountService(staticService.service, "/static")
-          .serve
-      }
-
-      result.flatten
+  ): F[fs2.Stream[F, ExitCode]] =
+    Ref[F].of(List.empty[Game]).map { ref =>
+      val client= BlazeClientBuilder(ExecutionContext.global).resource
+      val gameService = Services.gameService(ref)
+      val authService = Services.authService[F]()
+      val googleAuthService = Services.googleAuthService(userStore, client)
+      val staticService = new StaticService[F]()
+      BlazeBuilder[F]
+        .bindHttp(Constants.port, "0.0.0.0")
+        .mountService(gameService, "/")
+        .mountService(googleAuthService.service, "/auth/google")
+        .mountService(authService.service, "/auth")
+        .mountService(staticService.service, "/static")
+        .serve
     }
 }
 

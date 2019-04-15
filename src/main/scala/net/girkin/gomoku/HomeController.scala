@@ -3,7 +3,6 @@ package net.girkin.gomoku
 import cats.effect.IO
 import io.circe.Encoder
 import io.circe.syntax._
-import javax.inject._
 import users.User
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -34,8 +33,7 @@ object global {
 //  }
 //}
 
-@Singleton
-class HomeController @Inject()
+class HomeController
 // (
 //  google: GoogleAuthImpl,
 //  loggingAction: LoggingAction,

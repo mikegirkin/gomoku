@@ -1,10 +1,10 @@
 package net.girkin.gomoku.game
 
-import cats._, cats.implicits._
+import cats._
+import cats.implicits._
 import java.util.UUID
 
 import cats.Monad
-
 
 sealed trait GomokuRequest
 
@@ -17,7 +17,7 @@ case class MakeMove(
 
 case class Concede(
   userId: UUID
-)
+) extends GomokuRequest
 
 sealed trait GomokuResponse
 
@@ -32,19 +32,21 @@ class GameStream[F[_]: Monad](game: Game) {
   }
 
   def saveMove(move: MakeMove): F[Unit] = {
-
+    ???
   }
 
   def processRequest(req: GomokuRequest): F[GomokuResponse] = {
     req match {
-      case MakeMove(id, userId, row, column) =>
+      case m @ MakeMove(id, userId, row, column) =>
         game.makeMove(MoveAttempt(row, column, userId)).fold(
-          error => {
+          error => Monad[F].pure(
             BadRequest()
-          },
+          ),
           newGameState => {
-            saveMove()
-            StateChanged()
+            saveMove(m)
+            Monad[F].pure(
+              StateChanged()
+            )
           }
         )
       case Concede(userId) => ???

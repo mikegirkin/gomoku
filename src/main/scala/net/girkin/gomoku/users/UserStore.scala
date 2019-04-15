@@ -5,7 +5,6 @@ import java.util.UUID
 
 import anorm.Macro.ColumnNaming
 import cats.effect.IO
-import javax.inject.Inject
 import net.girkin.gomoku.Database
 
 case class User(
@@ -19,7 +18,7 @@ trait UserStore[Eff[_]] {
   def upsert(user: User): Eff[Unit]
 }
 
-class PsqlAnormUserStore @Inject() (
+class PsqlAnormUserStore (
   db: Database
 ) extends UserStore[IO] {
 

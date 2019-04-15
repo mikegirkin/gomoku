@@ -3,7 +3,6 @@ package net.girkin.gomoku.game
 import java.util.UUID
 
 import cats._, cats.implicits._
-import javax.inject.Inject
 import cats.data.EitherT
 
 object Ruleset {
@@ -25,7 +24,7 @@ trait GameServer[F[_]] {
   def joinRandomGame(userId: UUID): EitherT[F, JoinGameError, JoinGameSuccess]
 }
 
-class GameServerImpl[F[_]: Monad] @Inject()(
+class GameServerImpl[F[_]: Monad](
   gameStore: GameStore[F]
 ) extends GameServer[F] {
 

@@ -12,12 +12,12 @@ version := "1.0-SNAPSHOT"
 
 scalaVersion := "2.12.6"
 
-val http4sVersion = "0.18.21"
-val circeVersion = "0.11.0"
+val http4sVersion = "0.20.0-RC1"
+val circeVersion = "0.11.1"
 val LogbackVersion = "1.2.3"
 
 libraryDependencies ++= Seq(
-  "net.codingwell"          %% "scala-guice" % "4.2.1",
+  //"net.codingwell"          %% "scala-guice" % "4.2.1",
 
   //"org.scalikejdbc"         %% "scalikejdbc"       % "3.3.2",
   "org.playframework.anorm" %% "anorm"      % "2.6.2",
@@ -33,12 +33,12 @@ libraryDependencies ++= Seq(
   "ch.qos.logback"          % "logback-classic"     % LogbackVersion,
 
   "io.circe"        %% "circe-generic"         % circeVersion,
-  "io.circe"        %% "circe-literal"         % circeVersion,
+//  "io.circe"        %% "circe-literal"         % circeVersion,
   "io.circe"        %% "circe-generic-extras"  % circeVersion,
   "io.circe"        %% "circe-java8"           % circeVersion,
-  "io.circe"        %% "circe-shapes"          % circeVersion,
+//  "io.circe"        %% "circe-shapes"          % circeVersion,
   "org.reactormonk" %% "cryptobits"            % "1.2",
-  "com.pauldijou"   %% "jwt-circe"             % "0.18.0",
+  "com.pauldijou"   %% "jwt-circe"             % "2.1.0",
 
   "org.scalatest"   %% "scalatest"             % "3.0.5" % "test"
 )
