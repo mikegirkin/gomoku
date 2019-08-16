@@ -1,7 +1,6 @@
 package controllers
 
 import cats.effect.IO
-import fs2.async.Ref
 import net.girkin.gomoku.game.{Game, InmemGameStore}
 import org.scalatest.WordSpec
 

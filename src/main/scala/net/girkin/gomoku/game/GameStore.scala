@@ -4,12 +4,8 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 import anorm.Macro.ColumnNaming
-import cats.Functor
-import cats.data.OptionT
-import cats.effect.IO
-import cats.effect.concurrent.Ref
-import cats.implicits._
 import net.girkin.gomoku.Database
+import zio.{IO, Ref}
 
 case class GameStoreRecord(
   id: UUID,
@@ -20,20 +16,20 @@ case class GameStoreRecord(
   status: String
 )
 
-trait GameStore[F[_]] {
-  def getGamesAwaitingPlayers(): F[Seq[Game]]
-  def saveGameRecord(game: Game): F[Unit]
-  def getGame(id: UUID): OptionT[F, Game]
+trait GameStore {
+  def getGamesAwaitingPlayers(): IO[Throwable, List[Game]]
+  def saveGameRecord(game: Game): IO[Throwable, Unit]
+  def getGame(id: UUID): IO[Throwable, Option[Game]]
 }
 
-class InmemGameStore[F[_]: Functor](activeGames: Ref[F, List[Game]]) extends GameStore[F] {
-  override def getGamesAwaitingPlayers(): F[Seq[Game]] = {
+class InmemGameStore(activeGames: Ref[List[Game]]) extends GameStore {
+  override def getGamesAwaitingPlayers(): IO[Throwable, List[Game]] = {
     activeGames.get.map {
       _.filter { _.status == WaitingForUsers }
     }
   }
 
-  override def saveGameRecord(game: Game): F[Unit] = {
+  override def saveGameRecord(game: Game): IO[Throwable, Unit] = {
     activeGames.update { gameList =>
       if(gameList.exists(_.gameId == game.gameId)) {
         gameList.map { item =>
@@ -43,18 +39,16 @@ class InmemGameStore[F[_]: Functor](activeGames: Ref[F, List[Game]]) extends Gam
       } else {
         game :: gameList
       }
-    }.void
+    }.unit
   }
 
-  override def getGame(id: UUID): OptionT[F, Game] = {
-    OptionT {
-      activeGames.get.map { games =>
-        games.find {
-          _.gameId == id
-        }
+  override def getGame(id: UUID): IO[Throwable, Option[Game]] = {
+    activeGames.get.map { games =>
+      games.find {
+        _.gameId == id
       }
     }
-  }
+}
 }
 
 class PsqlGameStore(
@@ -65,16 +59,17 @@ class PsqlGameStore(
 
   val storeRecordParser = Macro.namedParser[GameStoreRecord](ColumnNaming.SnakeCase)
 
-  def getGamesAwaitingPlayers(): IO[Seq[GameStoreRecord]] = IO {
+  def getGamesAwaitingPlayers(): IO[Throwable, List[Game]] = IO {
     db.withConnection { implicit cn =>
       SQL"select * from games where status='awaiting'"
         .as(storeRecordParser.*)
+      ???
     }
   }
 
   def saveGameRecord(
     game: GameStoreRecord
-  ): IO[Unit] = IO {
+  ): IO[Throwable, Unit] = IO {
     db.withConnection { implicit cn =>
       SQL"""
         insert into games (id, created_at, user_1, user_2, winning_condition, status)

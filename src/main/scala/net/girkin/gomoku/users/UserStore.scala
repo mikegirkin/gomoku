@@ -4,8 +4,8 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 import anorm.Macro.ColumnNaming
-import cats.effect.IO
 import net.girkin.gomoku.Database
+import zio.Task
 
 case class User(
   id: UUID,
@@ -13,14 +13,14 @@ case class User(
   createdAt: LocalDateTime
 )
 
-trait UserStore[Eff[_]] {
-  def getByEmail(email: String): Eff[Option[User]]
-  def upsert(user: User): Eff[Unit]
+trait UserStore[F[_]] {
+  def getByEmail(email: String): F[Option[User]]
+  def upsert(user: User): F[Unit]
 }
 
 class PsqlAnormUserStore (
   db: Database
-) extends UserStore[IO] {
+) extends UserStore[Task] {
 
   import anorm._
 
@@ -28,13 +28,13 @@ class PsqlAnormUserStore (
 
   override def getByEmail(
     email: String
-  ): IO[Option[User]] = IO {
+  ): Task[Option[User]] = Task {
     db.withConnection { implicit cn =>
       SQL"select * from users where email=$email".as(userParser.singleOpt)
     }
   }
 
-  override def upsert(user: User): IO[Unit] = IO {
+  override def upsert(user: User): Task[Unit] = Task {
     db.withConnection { implicit cn =>
       SQL"""
         insert into users (id, email, created_at)

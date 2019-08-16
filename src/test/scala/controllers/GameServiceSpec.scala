@@ -5,38 +5,47 @@ import java.util.UUID
 
 import cats.Id
 import cats.effect.IO
-import fs2.async.Ref
 import net.girkin.gomoku.auth.AuthPrimitives
 import net.girkin.gomoku.game._
 import net.girkin.gomoku.users.User
-import net.girkin.gomoku.{Auth, AuthUser, Constants, GameService}
+import net.girkin.gomoku.{Auth, AuthUser, Constants, GameService, Routes}
 import org.http4s._
-import org.http4s.dsl.io._
+import org.http4s.syntax.all._
+import org.http4s.server.Router
 import org.scalatest.{Inside, MustMatchers, WordSpec}
+import zio.{DefaultRuntime, Ref, Task}
+import zio.interop.catz._
 
 class GameServiceSpec extends WordSpec
   with MustMatchers
   with Inside {
 
   implicit val ec = scala.concurrent.ExecutionContext.global
+  implicit val rt = new DefaultRuntime {}
 
   "GameController 'JoinRandomGame'" should {
-    val ref = Ref[IO, List[Game]](List.empty)
-    val store = new InmemGameStore(ref.unsafeRunSync())
-    val authService = new Auth[IO]
-    val service = new GameService[IO](
+    val ref = Ref.make[List[Game]](List.empty)
+    val store = new InmemGameStore(rt.unsafeRun(ref))
+    val authService = new Auth[Task]
+    val gameService = new Routes(
       authService,
-      new GameServerImpl[IO](store),
-      store,
-      ec
+      new GameService(
+        new GameServerImpl(store),
+        store
+      )
     ).service
-    val url = Uri.uri("/join")
+
+    val service = Router[Task](
+      "/" -> gameService
+    ).orNotFound
+
+    val url = uri"/join"
 
     val user1 = User(UUID.randomUUID(), "test1@example.com", LocalDateTime.now)
     val authToken = AuthUser.fromUser(user1)
     val nonce = "a87fvoajlhvlbhv"
-    val joinRequest = Request[IO](method = Method.POST, uri = url)
-      .withHeaders(Headers(
+    val joinRequest = Request[Task](method = Method.POST, uri = url)
+      .withHeaders(Headers.of(
         Header("X-Requested-With", "XMLHttpRequest")
       ))
 
@@ -45,16 +54,16 @@ class GameServiceSpec extends WordSpec
 
 
     "return 403 when not authenticated" in {
-      val result = service.orNotFound.run(joinRequest).unsafeRunSync()
+      val result = rt.unsafeRun(service.run(joinRequest))
 
       result.status mustBe Status.Forbidden
     }
 
     "be able to join game when authenticated" in {
-      val result = service.orNotFound.run(authenticatedRequest).unsafeRunSync()
+      val result = rt.unsafeRun(service.run(authenticatedRequest))
 
-      result.status mustBe Ok
-      val gamesInStore = store.getGamesAwaitingPlayers().unsafeRunSync()
+      result.status mustBe Status.Ok
+      val gamesInStore = rt.unsafeRun(store.getGamesAwaitingPlayers())
       gamesInStore must have size 1
       inside(gamesInStore.head) {
         case Game(_, players, status, _, _) =>
@@ -65,10 +74,10 @@ class GameServiceSpec extends WordSpec
     }
 
     "be able to prevent player from signing up for the game if they are waiting for one" in {
-      val result = service.orNotFound.run(authenticatedRequest).unsafeRunSync()
+      val result = rt.unsafeRun(service.run(authenticatedRequest))
 
-      result.status mustBe Ok
-      val gamesInStore = store.getGamesAwaitingPlayers().unsafeRunSync()
+      result.status mustBe Status.Ok
+      val gamesInStore = rt.unsafeRun(store.getGamesAwaitingPlayers())
       gamesInStore must have size 1
       inside(gamesInStore.head) {
         case Game(_, players, status, _, _) =>
@@ -80,18 +89,24 @@ class GameServiceSpec extends WordSpec
   }
 
   "GameService 'wsEcho'" should {
-    val ref = Ref[IO, List[Game]](List.empty)
-    val store = new InmemGameStore(ref.unsafeRunSync())
-    val authService = new Auth[IO]
-    val service: HttpService[IO] = new GameService[IO](
+    val ref = Ref.make[List[Game]](List.empty)
+    val store = new InmemGameStore(rt.unsafeRun(ref))
+    val authService = new Auth[Task]
+    val gameService = new Routes(
       authService,
-      new GameServerImpl[IO](store),
-      store,
-      ec
-    ).anonymous
-    val url = Uri.uri("/wsecho")
-    val request = Request[IO](uri = url)
-      .withHeaders(Headers(
+      new GameService(
+        new GameServerImpl(store),
+        store
+      )
+    ).service
+
+    val service = Router[Task](
+      "/" -> gameService
+    ).orNotFound
+
+    val url = uri"/wsecho"
+    val request = Request[Task](uri = url)
+      .withHeaders(Headers.of(
         Header("X-Requested-With", "XMLHttpRequest")
       ))
 

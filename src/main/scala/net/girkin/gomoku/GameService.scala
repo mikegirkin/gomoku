@@ -2,8 +2,6 @@ package net.girkin.gomoku
 
 import java.util.UUID
 
-import cats.effect.{Concurrent, Effect}
-import cats.implicits._
 import io.circe.syntax._
 import fs2._
 import fs2.concurrent.Queue
@@ -16,58 +14,30 @@ import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.twirl._
 import org.http4s.websocket.WebSocketFrame
 import org.http4s.websocket.WebSocketFrame.Text
+import zio.Task
+import zio.interop.catz._
 
-import scala.concurrent.ExecutionContext
-import scala.util.Try
+class GameService (
+  gameServer: GameServer,
+  gameStore: GameStore
+) extends Http4sDsl[Task] {
 
-class ArbitratyPathVar[A](cast: String => A) {
-  def unapply(str: String): Option[A] =
-    if (!str.isEmpty)
-      Try(cast(str)).toOption
-    else
-      None
-}
-
-object UUIDVar extends ArbitratyPathVar[UUID](s => UUID.fromString(s))
-
-class GameService[F[_]: Concurrent] (
-  authService: Auth[F],
-  gameServer: GameServer[F],
-  gameStore: GameStore[F]
-) extends Http4sDsl[F] {
-
-  val gameService = authService.secured(
-    AuthedService[AuthUser, F] {
-      case GET -> Root as token => gameApp(token)
-      case GET -> Root / UUIDVar(gameId) as token => game(token, gameId)
-      case POST -> Root / "join" as token => joinRandomGame(token)
-    }
-  )
-
-  val websocketService = authService.secured(
-    AuthedService[AuthUser, F] {
-      case GET -> Root / "ws" / UUIDVar(gameId) as token => wsGame(token, gameId)
-    }
-  )
-
-  val service = websocketService <+> gameService
-
-  def gameApp(userToken: AuthUser): F[Response[F]] = {
+  def gameApp(userToken: AuthUser): Task[Response[Task]] = {
     Ok(
       views.html.dashboard()
     )
   }
 
-  def game(userToken: AuthUser, gameId: UUID): F[Response[F]] = {
-    gameStore.getGame(gameId).fold(
+  def game(userToken: AuthUser, gameId: UUID): Task[Response[Task]] = {
+    gameStore.getGame(gameId).flatMap(_.fold(
       NotFound()
     ) {
       game => Ok(game.asJson)
-    }.flatten
+    })
   }
 
-  def joinRandomGame(token: AuthUser): F[Response[F]] = {
-    gameServer.joinRandomGame(token.userId).fold[F[Response[F]]](
+  def joinRandomGame(token: AuthUser): Task[Response[Task]] = {
+    gameServer.joinRandomGame(token.userId).fold[Task[Response[Task]]](
       error => BadRequest(""),
       {
         case JoinGameSuccess(gameID, webSocketUrl) =>
@@ -79,19 +49,19 @@ class GameService[F[_]: Concurrent] (
     ).flatten
   }
 
-  def wsGame(token: AuthToken, gameId: UUID): F[Response[F]] = {
-    val echoReply: Pipe[F, WebSocketFrame, WebSocketFrame] =
+  def wsGame(token: AuthToken, gameId: UUID): Task[Response[Task]] = {
+    val echoReply: Pipe[Task, WebSocketFrame, WebSocketFrame] =
       _.collect {
         case Text(msg, _) => Text("You sent the server: " + msg)
         case _ => Text("Something new")
       }
 
     Queue
-      .unbounded[F, WebSocketFrame]
+      .unbounded[Task, WebSocketFrame]
       .flatMap { q =>
         val d = q.dequeue.through(echoReply)
         val e = q.enqueue
-        WebSocketBuilder[F].build(d, e)
+        WebSocketBuilder[Task].build(d, e)
       }
   }
 }

@@ -12,25 +12,25 @@ version := "1.0-SNAPSHOT"
 
 scalaVersion := "2.12.6"
 
-val http4sVersion = "0.20.0-RC1"
+val http4sVersion = "0.20.1"
 val circeVersion = "0.11.1"
 val LogbackVersion = "1.2.3"
 
 libraryDependencies ++= Seq(
-  //"net.codingwell"          %% "scala-guice" % "4.2.1",
-
-  //"org.scalikejdbc"         %% "scalikejdbc"       % "3.3.2",
   "org.playframework.anorm" %% "anorm"      % "2.6.2",
   "org.postgresql"           % "postgresql" % "42.2.4",
   "com.mchange"              % "c3p0"       % "0.9.5.2",
 
-  "org.http4s"             %% "http4s-dsl"          % http4sVersion,
-  "org.http4s"             %% "http4s-blaze-client" % http4sVersion,
-  "org.http4s"             %% "http4s-blaze-server" % http4sVersion,
-  "org.http4s"             %% "http4s-circe"        % http4sVersion,
-  "org.http4s"             %% "http4s-twirl"        % http4sVersion,
+  "org.http4s"      %% "http4s-dsl"            % http4sVersion,
+  "org.http4s"      %% "http4s-blaze-client"   % http4sVersion,
+  "org.http4s"      %% "http4s-blaze-server"   % http4sVersion,
+  "org.http4s"      %% "http4s-circe"          % http4sVersion,
+  "org.http4s"      %% "http4s-twirl"          % http4sVersion,
 
-  "ch.qos.logback"          % "logback-classic"     % LogbackVersion,
+  "dev.zio"         %% "zio"                   % "1.0.0-RC8-12",
+  "dev.zio"         %% "zio-interop-cats"      % "1.0.0-RC8-12",
+
+  "ch.qos.logback"   % "logback-classic"       % LogbackVersion,
 
   "io.circe"        %% "circe-generic"         % circeVersion,
 //  "io.circe"        %% "circe-literal"         % circeVersion,

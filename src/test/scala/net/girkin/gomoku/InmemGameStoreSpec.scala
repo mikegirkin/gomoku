@@ -2,22 +2,23 @@ package net.girkin.gomoku
 
 import java.util.UUID
 
-import cats.effect.IO
-import fs2.async.Ref
 import net.girkin.gomoku.game.{Game, InmemGameStore}
 import org.scalatest.{Assertion, Matchers, WordSpec}
+import zio.{Ref, Task, DefaultRuntime}
 
 class InmemGameStoreSpec extends WordSpec with Matchers {
-  def io(test: => IO[Assertion]): Unit = {
-    test.unsafeRunSync()
+  val env = new DefaultRuntime {}
+
+  def io(test: => Task[Assertion]): Unit = {
+    env.unsafeRun(test)
   }
 
-  def withIO[A](m: IO[A])(test: A => IO[Assertion]): Unit = {
-    m.flatMap(test).unsafeRunSync()
-  }
-
-  def createStore: IO[InmemGameStore[IO]] = {
-    Ref[IO, List[Game]](List.empty).map {
+//  def withIO[A](m: Task[A])(test: A => Task[Assertion]): Unit = {
+//    m.flatMap(test).unsafeRunSync()
+//  }
+//
+  def createStore: Task[InmemGameStore] = {
+    Ref.make[List[Game]](List.empty).map {
       x => new InmemGameStore(x)
     }
   }
