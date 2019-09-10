@@ -1,13 +1,13 @@
-package net.girkin.gomoku
+package net.girkin.gomoku.api
 
 import java.util.UUID
 
+import cats.implicits._
+import net.girkin.gomoku.{Auth, AuthUser}
 import org.http4s.AuthedService
 import org.http4s.dsl.Http4sDsl
 import zio.Task
 import zio.interop.catz._
-import zio.interop.catz.implicits._
-import cats.implicits._
 
 import scala.util.Try
 
@@ -23,7 +23,7 @@ object UUIDVar extends ArbitratyPathVar[UUID](s => UUID.fromString(s))
 
 class Routes(
   authService: Auth[Task],
-  gameService: GameService,
+  gameService: GameRoutesHandler,
 ) extends Http4sDsl[Task] {
 
   val gameRoutes = authService.secured(
@@ -36,7 +36,7 @@ class Routes(
 
   val webSocketRoutes = authService.secured(
     AuthedService[AuthUser, Task] {
-      case GET -> Root / "ws" / UUIDVar(gameId) as token => gameService.wsGame(token, gameId)
+      case GET -> Root / "ws" as token => gameService.handleSocketRequest(token)
     }
   )
 

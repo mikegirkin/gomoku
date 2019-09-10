@@ -1,16 +1,17 @@
-package net.girkin.gomoku
+package net.girkin.gomoku.api
 
 import java.io.File
 import java.nio.file.Paths
 
 import cats.effect.{ContextShift, Effect}
+import net.girkin.gomoku.Logging
 import org.http4s.dsl.Http4sDsl
-import org.http4s.{HttpRoutes, HttpService, Response, StaticFile}
+import org.http4s.{HttpRoutes, Response, StaticFile}
 
 import scala.concurrent.ExecutionContext
 
 
-class StaticService[F[_]: Effect : ContextShift] extends Http4sDsl[F] with Logging {
+class StaticRoutesHandler[F[_]: Effect : ContextShift] extends Http4sDsl[F] with Logging {
   val service = HttpRoutes.of[F] {
     case GET -> file => serveStatic(file.toList.mkString("/"))
   }

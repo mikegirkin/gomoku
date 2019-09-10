@@ -2,6 +2,7 @@ package net.girkin.gomoku
 
 import cats.data.{Kleisli, OptionT}
 import cats.effect._
+import net.girkin.gomoku.api.{GameRoutesHandler, Routes, StaticRoutesHandler}
 import net.girkin.gomoku.auth.{AuthPrimitives, GoogleAuthImpl, SecurityConfiguration}
 import net.girkin.gomoku.game.{Game, GameServerImpl, InmemGameStore}
 import net.girkin.gomoku.users.{PsqlAnormUserStore, UserStore}
@@ -11,6 +12,7 @@ import org.http4s.dsl.Http4sDsl
 import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
 import org.http4s.syntax.all._
+import org.http4s.websocket.WebSocketFrame
 import org.http4s.{HttpApp, HttpRoutes, Request, Response}
 import zio.clock.Clock
 import zio.interop.catz._
@@ -26,7 +28,7 @@ object Starter extends App with Http4sDsl[Task] {
     val userStore = Services.userStore
     val authService = Services.authService[Task]()
     val googleAuthService = Services.googleAuthService[Task](userStore, client)
-    val staticService = new StaticService[Task]()
+    val staticService = new StaticRoutesHandler[Task]()
 
     val app: ZIO[A, Throwable, Unit] = for {
       gameService <- Services.gameService(authService)
@@ -85,12 +87,14 @@ object Services {
   ): Task[Kleisli[OptionT[Task, ?], Request[Task], Response[Task]]] = {
     for {
       ref <- zio.Ref.make(List.empty[Game])
+      userChannelsStore <- zio.RefM.make(Map.empty[AuthUser, fs2.concurrent.Queue[Task, WebSocketFrame]])
       gameStore = new InmemGameStore(ref)
-      gameService = new GameService(
+      gameService = new GameRoutesHandler(
         new GameServerImpl(
           gameStore
         ),
-        gameStore
+        gameStore,
+        userChannelsStore
       )
     } yield {
       new Routes(authService, gameService).service

@@ -1,4 +1,4 @@
-package net.girkin.gomoku
+package net.girkin.gomoku.api
 
 import cats.effect.Effect
 import io.circe.Json
@@ -7,7 +7,7 @@ import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
 
 
-class HealthCheckService[F[_]: Effect] extends Http4sDsl[F] {
+class HealthCheckRoutesHandler[F[_]: Effect] extends Http4sDsl[F] {
 
   val service: HttpRoutes[F] = {
     HttpRoutes.of[F] {
