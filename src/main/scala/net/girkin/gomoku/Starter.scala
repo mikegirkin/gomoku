@@ -11,9 +11,10 @@ import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
+import org.http4s.server.middleware.Logger
 import org.http4s.syntax.all._
 import org.http4s.websocket.WebSocketFrame
-import org.http4s.{HttpApp, HttpRoutes, Request, Response}
+import org.http4s.{HttpRoutes, Request, Response}
 import zio.clock.Clock
 import zio.interop.catz._
 import zio.interop.catz.implicits._
@@ -32,9 +33,7 @@ object Starter extends App with Http4sDsl[Task] {
 
     val app: ZIO[A, Throwable, Unit] = for {
       gameService <- Services.gameService(authService)
-    } yield {
-
-      val httpRoutes = Router[Task](
+      httpRoutes = Router[Task](
         "/" -> gameService,
         "/auth/google" -> googleAuthService.service,
         "/auth" -> authService.service,
@@ -43,21 +42,22 @@ object Starter extends App with Http4sDsl[Task] {
           case GET -> Root => Ok("HEALTHCHECK")
         }
       ).orNotFound
-
-      BlazeServerBuilder[Task]
+      server <- BlazeServerBuilder[Task]
         .bindHttp(Constants.port, "0.0.0.0")
-        .withHttpApp(HttpApp(httpRoutes.run))
+        .withHttpApp(Logger.httpApp(true, false)(httpRoutes))
         .serve
         .compile[Task, Task, ExitCode]
         .drain
+    } yield {
+      server
     }
 
     app
   }
 
-  override def run(args: List[String]): ZIO[Environment, Nothing, Int] = {
+  type AppEnvironment = Clock
 
-    type AppEnvironment = Clock
+  override def run(args: List[String]): ZIO[Environment, Nothing, Int] = {
 
     val environment = ZIO.runtime[AppEnvironment]
     val server = environment.flatMap { env =>
@@ -67,8 +67,14 @@ object Starter extends App with Http4sDsl[Task] {
     val program = server.provideSome[Environment] { _ => new Clock.Live {} }
 
     program.foldM(
-      err => ZIO.succeed(1),
-      _ => ZIO.succeed(0)
+      err => {
+        println("Error")
+        ZIO.succeed(1)
+      },
+      _ => {
+        println("Success finish")
+        ZIO.succeed(0)
+      }
     )
   }
 }
