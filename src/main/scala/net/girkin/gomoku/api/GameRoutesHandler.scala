@@ -49,14 +49,18 @@ class GameRoutesHandler (
   def handleSocketRequest(token: AuthUser): Task[Response[Task]] = {
     def findOrCreateOutboundPipe(token: AuthUser): Task[Stream[Task, WebSocketFrame]] = {
       for {
-        channels <- userChannels.get
-        outboundPipe <- if(!channels.contains(token)) {
-            Task.succeed(channels(token))
+        sink <- userChannels.modify { map =>
+          if(map.contains(token)) {
+            Task.succeed((map(token), map))
           } else {
-            Queue.unbounded[Task, WebSocketFrame]
+            Queue.unbounded[Task, WebSocketFrame].map { q =>
+              val newMapState = map + (token -> q)
+              (q, map)
+            }
           }
+        }
       } yield {
-        outboundPipe.dequeue
+        sink.dequeue
       }
     }
 

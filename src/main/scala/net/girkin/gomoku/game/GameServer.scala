@@ -39,7 +39,7 @@ class GameServerImpl(
       }
       _ <- gameStore.saveGameRecord(updatedGame)
     } yield {
-      val webSocketAddress = s"/ws/${updatedGame.gameId}"
+      val webSocketAddress = s"/ws"
       JoinGameSuccess(updatedGame.gameId, webSocketAddress)
     }
 
