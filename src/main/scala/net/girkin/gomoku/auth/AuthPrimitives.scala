@@ -24,7 +24,7 @@ class AuthPrimitives[F[_]: Monad] {
     }
   }
 
-  def login(response: F[Response[F]], user: User): F[Response[F]] = {
+  def setAuthCookie(response: F[Response[F]], user: User): F[Response[F]] = {
     val token = AuthUser.fromUser(user)
     for {
       resp <- response
@@ -39,6 +39,17 @@ class AuthPrimitives[F[_]: Monad] {
         )
       )
     }
+  }
+
+  def removeAuthCookie(response: Response[F]): Response[F] = {
+    response.removeCookie(
+      ResponseCookie(
+        Constants.authCookieName,
+        "",
+        path = Some("/"),
+        maxAge = Some(Duration(1, TimeUnit.DAYS).toMillis)
+      )
+    )
   }
 
 }

@@ -158,7 +158,7 @@ class GoogleAuthImpl[Eff[_]: Effect](
       user <- EitherT.right[GoogleAuthError](getOrCreateUser(email))
     } yield {
       logger.info(s"Logging in user ${user}")
-      authPrimitives.login(
+      authPrimitives.setAuthCookie(
         SeeOther(
           Location(Uri.fromString("/").toOption.get)
         ).map(_.removeCookie(

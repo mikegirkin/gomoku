@@ -30,7 +30,7 @@ class GameRoutesHandlerSpec extends WordSpec
     val ref = Ref.make[List[Game]](List.empty)
     val store = new InmemGameStore(rt.unsafeRun(ref))
     val channelStore = RefM.make[Map[AuthUser, Queue[Task, WebSocketFrame]]](Map.empty)
-    val authService = new Auth[Task]
+    val authService = new Auth[Task](new AuthPrimitives[Task])
     val gameService = new Routes(
       authService,
       new GameRoutesHandler(
@@ -96,7 +96,7 @@ class GameRoutesHandlerSpec extends WordSpec
   "GameService 'wsEcho'" should {
     val ref = Ref.make[List[Game]](List.empty)
     val store = new InmemGameStore(rt.unsafeRun(ref))
-    val authService = new Auth[Task]
+    val authService = new Auth[Task](new AuthPrimitives[Task])
     val channelStore = RefM.make[Map[AuthUser, Queue[Task, WebSocketFrame]]](Map.empty)
     val gameService = new Routes(
       authService,

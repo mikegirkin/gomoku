@@ -6,17 +6,18 @@ import cats.Applicative
 import cats.data.{Kleisli, OptionT}
 import cats.effect.Effect
 import cats.implicits._
+import io.circe.ObjectEncoder
 import io.circe.generic.semiauto._
 import io.circe.syntax._
+import net.girkin.gomoku.auth.AuthPrimitives
 import net.girkin.gomoku.users.User
 import org.http4s.circe._
-import org.http4s.implicits._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.headers.Location
 import org.http4s.server.AuthMiddleware
 import org.http4s.twirl._
 import org.http4s.util.CaseInsensitiveString
-import org.http4s.{AuthedService, HttpService, Request, Response, Uri, headers}
+import org.http4s.{AuthedService, HttpRoutes, Request, Response, Uri, headers}
 
 sealed trait AuthToken
 case class AuthUser(userId: UUID) extends AuthToken
@@ -30,17 +31,27 @@ sealed trait AuthErr
 case object NoAuthCookie extends AuthErr
 case object CookieInvalid extends AuthErr
 
-class Auth[F[_]: Effect] extends Http4sDsl[F]{
+class Auth[F[_]: Effect](
+  authPrimitives: AuthPrimitives[F]
+) extends Http4sDsl[F] with Logging {
 
-  implicit val authErrEncoder = deriveEncoder[AuthErr]
+  implicit val authErrEncoder: ObjectEncoder[AuthErr] = deriveEncoder[AuthErr]
 
-  val service = HttpService[F] {
-    case GET -> Root / "login" => login
+  val service = HttpRoutes.of[F] {
+    case GET -> Root / "login" => login()
+    case GET -> Root / "logout" => logout()
   }
 
   def login(): F[Response[F]] = {
     Ok(views.html.login())
   }
+
+  def logout(): F[Response[F]] = {
+    SeeOther(
+      Location(Uri.uri("/"))
+    ).map { authPrimitives.removeAuthCookie }
+  }
+
 
   def authenticate: Kleisli[F, Request[F], Either[AuthErr, AuthUser]] = Kleisli[F, Request[F], Either[AuthErr, AuthUser]]({ request =>
     implicitly[Applicative[F]].pure {
@@ -71,15 +82,11 @@ class Auth[F[_]: Effect] extends Http4sDsl[F]{
           .get(CaseInsensitiveString("X-Requested-With"))
           .exists { _.value == "XMLHttpRequest" }
         ) {
-          Forbidden(req.authInfo.asJson).map(
-            _.removeCookie(Constants.authCookieName)
-          )
+          Forbidden(req.authInfo.asJson).map(authPrimitives.removeAuthCookie)
         } else {
           SeeOther(
             Location(Uri.fromString(Constants.LoginUrl).toOption.get),
-          ).map(
-            _.removeCookie(Constants.authCookieName)
-          )
+          ).map(authPrimitives.removeAuthCookie)
         }
       )
   }

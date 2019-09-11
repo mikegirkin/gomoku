@@ -27,8 +27,8 @@ object Starter extends App with Http4sDsl[Task] {
   private def buildForRuntime[A](implicit runtime: Runtime[A]): ZIO[A, Throwable, Unit]  = {
     val client = BlazeClientBuilder[Task](ExecutionContext.global).resource
     val userStore = Services.userStore
-    val authService = Services.authService[Task]()
-    val googleAuthService = Services.googleAuthService[Task](userStore, client)
+    val authService = Services.authService
+    val googleAuthService = Services.googleAuthService(userStore, client)
     val staticService = new StaticRoutesHandler[Task]()
 
     val app: ZIO[A, Throwable, Unit] = for {
@@ -87,6 +87,7 @@ object Services {
     "270746747187-0ri8ig249up93ranj0l9qvpkhufaocv7.apps.googleusercontent.com",
     "WluSEQw9iNB2iIabeUDOf-no"
   )
+  val authPrimitives = new AuthPrimitives[Task]
 
   def gameService(
     authService: Auth[Task]
@@ -107,16 +108,16 @@ object Services {
     }
   }
 
-  def authService[F[_]: Effect](): Auth[F] = {
-    new Auth[F]()
+  def authService(implicit ev: Effect[Task]): Auth[Task] = {
+    new Auth[Task](authPrimitives)
   }
 
-  def googleAuthService[F[_]: Effect](
-    userStore: UserStore[F],
-    httpClient: Resource[F, Client[F]]
-  ) =
-    new GoogleAuthImpl[F](
-      new AuthPrimitives[F],
+  def googleAuthService(
+    userStore: UserStore[Task],
+    httpClient: Resource[Task, Client[Task]]
+  )(implicit ev: Effect[Task]) =
+    new GoogleAuthImpl[Task](
+      authPrimitives,
       userStore,
       securityConfiguration,
       httpClient
