@@ -49,27 +49,30 @@ class GameRoutesHandler (
   def handleSocketRequest(token: AuthUser): Task[Response[Task]] = {
     def findOrCreateOutboundPipe(token: AuthUser): Task[Stream[Task, WebSocketFrame]] = {
       for {
-        sink <- userChannels.modify { map =>
-          if(map.contains(token)) {
-            Task.succeed((map(token), map))
-          } else {
-            Queue.unbounded[Task, WebSocketFrame].map { q =>
-              val newMapState = map + (token -> q)
-              (q, map)
-            }
-          }
+        allUserChannels <- userChannels.get
+        existingOutboundOpt = allUserChannels.get(token)
+        outboundQueue <- existingOutboundOpt.fold(
+          Queue.unbounded[Task, WebSocketFrame]
+        )(
+          existing => Task.succeed(existing)
+        )
+        newOutbountQueuesList <- userChannels.update {
+          channels => Task.succeed(channels + (token -> outboundQueue))
         }
       } yield {
-        sink.dequeue
+        logger.debug(s"New outbound queues list ${newOutbountQueuesList}")
+        outboundQueue.dequeue
       }
     }
 
-    def processFrame(token: AuthUser)(frame: WebSocketFrame): Task[Map[AuthUser, WebSocketFrame]] = {
+    def processFrame(token: AuthUser)(frame: WebSocketFrame): Task[List[(AuthUser, WebSocketFrame)]] = {
       frame match {
         case Text(msg, _) => for {
           allUserChannels <- userChannels.get
         } yield {
-          allUserChannels.filterKeys(key => key != token).map {
+          logger.debug(s"Received ${msg} from $token")
+          logger.debug(s"All user channels: ${allUserChannels}")
+          allUserChannels.filterKeys(key => key != token).toList.map {
             case (user, _) => user -> Text(s"From $token, message: $msg")
           }
         }
@@ -77,21 +80,22 @@ class GameRoutesHandler (
           allUserChannels <- userChannels.get
           _ <- userChannels.update(m => Task.succeed(m.filterKeys(key => key != token)))
         } yield {
-          allUserChannels.filterKeys(key => key != token).map {
+          allUserChannels.filterKeys(key => key != token).toList.map {
             case (user, _) => user -> Text(s"User $token left the room")
           }
         }
-        case _ => Task.succeed(Map.empty)
+        case _ => Task.succeed(List.empty)
       }
     }
 
-    def executeSendOrder(sendOrder: Map[AuthUser, WebSocketFrame]): Task[Unit] = {
+    def executeSendOrder(sendOrder: List[(AuthUser, WebSocketFrame)]): Task[Unit] = {
+      logger.debug(s"Executing send order ${sendOrder}")
       for {
         channels <- userChannels.get
         result <- sendOrder.map { case (user, frame) =>
           channels.get(user).map { queue => queue.enqueue1(frame) }
             .getOrElse(Task.succeed[Unit](()))
-        }.toList.sequence.map(_ => ())
+        }.sequence.map(_ => ())
       } yield {
         result
       }

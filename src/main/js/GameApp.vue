@@ -23,6 +23,7 @@
             },
 
             handleSendEchoRequested: function (e) {
+                console.log('Sending test echo');
                 gameService.sendEcho("Test echo")
             }
         }
