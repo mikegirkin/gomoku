@@ -53,7 +53,7 @@ class Auth[F[_]: Effect](
   }
 
 
-  def authenticate: Kleisli[F, Request[F], Either[AuthErr, AuthUser]] = Kleisli[F, Request[F], Either[AuthErr, AuthUser]]({ request =>
+  private def authenticate: Kleisli[F, Request[F], Either[AuthErr, AuthUser]] = Kleisli[F, Request[F], Either[AuthErr, AuthUser]]({ request =>
     implicitly[Applicative[F]].pure {
       for {
         header <- headers.Cookie.from(request.headers).toRight(NoAuthCookie.asInstanceOf[AuthErr])
@@ -70,7 +70,7 @@ class Auth[F[_]: Effect](
     }
   })
 
-  def allowAnonymous(authToken: Either[AuthErr, AuthUser]): Either[AuthErr, AuthToken] = authToken match {
+  private def allowAnonymous(authToken: Either[AuthErr, AuthUser]): Either[AuthErr, AuthToken] = authToken match {
     case Left(NoAuthCookie) => Right(Anonymous)
     case x => x
   }

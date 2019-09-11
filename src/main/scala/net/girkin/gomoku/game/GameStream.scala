@@ -5,6 +5,7 @@ import cats.implicits._
 import java.util.UUID
 
 import cats.Monad
+import net.girkin.gomoku.game.GomokuResponse.{BadMoveRequest, StateChanged}
 
 sealed trait GomokuRequest
 
@@ -21,32 +22,30 @@ case class Concede(
 
 sealed trait GomokuResponse
 
-case class StateChanged() extends GomokuResponse
-case class BadRequest() extends GomokuResponse
+object GomokuResponse {
+  case class StateChanged() extends GomokuResponse
+  case class BadMoveRequest() extends GomokuResponse
+}
 
-class GameStream[F[_]: Monad](game: Game) {
-  def gameStream(
-    incoming: fs2.Stream[F, GomokuRequest]
-  ): fs2.Stream[F, GomokuResponse] = {
-    ???
-  }
+class GameStream[F[_]: Monad] {
 
   def saveMove(move: MakeMove): F[Unit] = {
     ???
   }
 
-  def processRequest(req: GomokuRequest): F[GomokuResponse] = {
+  def processRequest(game: Game)(req: GomokuRequest): F[(Game, List[GomokuResponse])] = {
     req match {
       case m @ MakeMove(id, userId, row, column) =>
         game.makeMove(MoveAttempt(row, column, userId)).fold(
           error => Monad[F].pure(
-            BadRequest()
+            game -> List(BadMoveRequest())
           ),
           newGameState => {
-            saveMove(m)
-            Monad[F].pure(
-              StateChanged()
-            )
+            for {
+              _ <- saveMove(m)
+            } yield {
+              newGameState -> List(StateChanged())
+            }
           }
         )
       case Concede(userId) => ???
