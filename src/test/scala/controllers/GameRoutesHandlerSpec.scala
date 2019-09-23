@@ -4,20 +4,17 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 import cats.Id
-import cats.effect.IO
-import fs2.concurrent.Queue
-import net.girkin.gomoku.api.{GameRoutesHandler, Routes}
+import net.girkin.gomoku.api.{GameRoutesHandler, OutboundChannels, Routes}
 import net.girkin.gomoku.auth.AuthPrimitives
 import net.girkin.gomoku.game._
 import net.girkin.gomoku.users.User
 import net.girkin.gomoku.{Auth, AuthUser, Constants}
 import org.http4s._
-import org.http4s.syntax.all._
 import org.http4s.server.Router
-import org.http4s.websocket.WebSocketFrame
+import org.http4s.syntax.all._
 import org.scalatest.{Inside, MustMatchers, WordSpec}
-import zio.{DefaultRuntime, Ref, RefM, Task}
 import zio.interop.catz._
+import zio.{DefaultRuntime, Ref, Task}
 
 class GameRoutesHandlerSpec extends WordSpec
   with MustMatchers
@@ -29,7 +26,7 @@ class GameRoutesHandlerSpec extends WordSpec
   "GameController 'JoinRandomGame'" should {
     val ref = Ref.make[List[Game]](List.empty)
     val store = new InmemGameStore(rt.unsafeRun(ref))
-    val channelStore = RefM.make[Map[AuthUser, Queue[Task, WebSocketFrame]]](Map.empty)
+    val channelStore = OutboundChannels.make()
     val authService = new Auth[Task](new AuthPrimitives[Task])
     val gameService = new Routes(
       authService,
@@ -97,7 +94,7 @@ class GameRoutesHandlerSpec extends WordSpec
     val ref = Ref.make[List[Game]](List.empty)
     val store = new InmemGameStore(rt.unsafeRun(ref))
     val authService = new Auth[Task](new AuthPrimitives[Task])
-    val channelStore = RefM.make[Map[AuthUser, Queue[Task, WebSocketFrame]]](Map.empty)
+    val channelStore = OutboundChannels.make()
     val gameService = new Routes(
       authService,
       new GameRoutesHandler(

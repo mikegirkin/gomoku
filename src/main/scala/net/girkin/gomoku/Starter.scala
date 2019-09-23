@@ -2,7 +2,7 @@ package net.girkin.gomoku
 
 import cats.data.{Kleisli, OptionT}
 import cats.effect._
-import net.girkin.gomoku.api.{GameRoutesHandler, Routes, StaticRoutesHandler}
+import net.girkin.gomoku.api.{GameRoutesHandler, OutboundChannels, Routes, StaticRoutesHandler}
 import net.girkin.gomoku.auth.{AuthPrimitives, GoogleAuthImpl, SecurityConfiguration}
 import net.girkin.gomoku.game.{Game, GameServerImpl, InmemGameStore}
 import net.girkin.gomoku.users.{PsqlAnormUserStore, UserStore}
@@ -13,7 +13,6 @@ import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
 import org.http4s.server.middleware.Logger
 import org.http4s.syntax.all._
-import org.http4s.websocket.WebSocketFrame
 import org.http4s.{HttpRoutes, Request, Response}
 import zio.clock.Clock
 import zio.interop.catz._
@@ -94,14 +93,14 @@ object Services {
   ): Task[Kleisli[OptionT[Task, ?], Request[Task], Response[Task]]] = {
     for {
       ref <- zio.Ref.make(List.empty[Game])
-      userChannelsStore <- zio.RefM.make(Map.empty[AuthUser, fs2.concurrent.Queue[Task, WebSocketFrame]])
+      userChannels <- OutboundChannels.make()
       gameStore = new InmemGameStore(ref)
       gameService = new GameRoutesHandler(
         new GameServerImpl(
           gameStore
         ),
         gameStore,
-        userChannelsStore
+        userChannels
       )
     } yield {
       new Routes(authService, gameService).service

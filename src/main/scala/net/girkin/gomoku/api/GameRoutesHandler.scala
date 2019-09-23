@@ -5,7 +5,6 @@ import java.util.UUID
 import cats.implicits._
 import io.circe.syntax._
 import fs2._
-import fs2.concurrent.Queue
 import net.girkin.gomoku.api.ApiObjects._
 import net.girkin.gomoku.game.{GameServer, GameStore}
 import net.girkin.gomoku.{AuthUser, Logging}
@@ -16,13 +15,13 @@ import org.http4s.server.websocket.WebSocketBuilder
 import org.http4s.twirl._
 import org.http4s.websocket.WebSocketFrame
 import org.http4s.websocket.WebSocketFrame.{Close, Text}
+import zio.Task
 import zio.interop.catz._
-import zio.{RefM, Task}
 
 class GameRoutesHandler (
   gameServer: GameServer,
   gameStore: GameStore,
-  userChannels: RefM[Map[AuthUser, Queue[Task, WebSocketFrame]]]
+  userChannels: OutboundChannels
 ) extends Http4sDsl[Task] with Logging {
 
   def gameApp(userToken: AuthUser): Task[Response[Task]] = {
@@ -47,41 +46,23 @@ class GameRoutesHandler (
   }
 
   def handleSocketRequest(token: AuthUser): Task[Response[Task]] = {
-    def findOrCreateOutboundPipe(token: AuthUser): Task[Stream[Task, WebSocketFrame]] = {
-      for {
-        allUserChannels <- userChannels.get
-        existingOutboundOpt = allUserChannels.get(token)
-        outboundQueue <- existingOutboundOpt.fold(
-          Queue.unbounded[Task, WebSocketFrame]
-        )(
-          existing => Task.succeed(existing)
-        )
-        newOutbountQueuesList <- userChannels.update {
-          channels => Task.succeed(channels + (token -> outboundQueue))
-        }
-      } yield {
-        logger.debug(s"New outbound queues list ${newOutbountQueuesList}")
-        outboundQueue.dequeue
-      }
-    }
-
     def processFrame(token: AuthUser)(frame: WebSocketFrame): Task[List[(AuthUser, WebSocketFrame)]] = {
       frame match {
         case Text(msg, _) => for {
-          allUserChannels <- userChannels.get
+          allUsers <- userChannels.activeUsers()
         } yield {
           logger.debug(s"Received ${msg} from $token")
-          logger.debug(s"All user channels: ${allUserChannels}")
-          allUserChannels.filterKeys(key => key != token).toList.map {
-            case (user, _) => user -> Text(s"From $token, message: $msg")
+          logger.debug(s"All user channels: ${allUsers}")
+          allUsers.filterNot(user => user == token).map {
+            user => user -> Text(s"From $token, message: $msg")
           }
         }
         case Close(_) => for {
-          allUserChannels <- userChannels.get
-          _ <- userChannels.update(m => Task.succeed(m.filterKeys(key => key != token)))
+          _ <- userChannels.removeOutboundUserChannel(token)
+          allUsers <- userChannels.activeUsers()
         } yield {
-          allUserChannels.filterKeys(key => key != token).toList.map {
-            case (user, _) => user -> Text(s"User $token left the room")
+          allUsers.filterNot(user => user == token).map {
+            user => user -> Text(s"User $token left the room")
           }
         }
         case _ => Task.succeed(List.empty)
@@ -90,15 +71,9 @@ class GameRoutesHandler (
 
     def executeSendOrder(sendOrder: List[(AuthUser, WebSocketFrame)]): Task[Unit] = {
       logger.debug(s"Executing send order ${sendOrder}")
-      for {
-        channels <- userChannels.get
-        result <- sendOrder.map { case (user, frame) =>
-          channels.get(user).map { queue => queue.enqueue1(frame) }
-            .getOrElse(Task.succeed[Unit](()))
-        }.sequence.map(_ => ())
-      } yield {
-        result
-      }
+      sendOrder.map((userChannels.route _).tupled)
+        .sequence
+        .map { _ => () }
     }
 
     def inboundStream(token: AuthUser)(stream: Stream[Task, WebSocketFrame]): Stream[Task, Unit] = {
@@ -106,13 +81,14 @@ class GameRoutesHandler (
     }
 
     for {
-      outboundStream <- findOrCreateOutboundPipe(token)
+      outboundQueue <- userChannels.findOrCreateUserChannel(token)
       result <- {
-        WebSocketBuilder[Task].build(outboundStream, inboundStream(token))
+        WebSocketBuilder[Task].build(outboundQueue.dequeue, inboundStream(token))
       }
     } yield {
       result
     }
   }
 }
+
 
