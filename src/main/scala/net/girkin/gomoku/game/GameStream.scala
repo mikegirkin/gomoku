@@ -3,7 +3,6 @@ package net.girkin.gomoku.game
 import java.util.UUID
 
 import fs2.{Pipe, Stream}
-import fs2._
 import net.girkin.gomoku.game.GomokuResponse.{BadMoveRequest, StateChanged}
 import zio.{RefM, Task}
 
@@ -28,8 +27,8 @@ case class Concede(
 sealed trait GomokuResponse
 
 object GomokuResponse {
-  case class StateChanged() extends GomokuResponse
-  case class BadMoveRequest(error: MoveError) extends GomokuResponse
+  case class StateChanged(gameId: UUID) extends GomokuResponse
+  case class BadMoveRequest(error: MoveError, gameId: UUID, userId: UUID) extends GomokuResponse
 }
 
 class GameStream(gameRef: RefM[Game]) {
@@ -42,13 +41,13 @@ class GameStream(gameRef: RefM[Game]) {
     for {
       game <- gameRef.get
       result <- game.makeMove(MoveAttempt(attempt.row, attempt.column, attempt.userId)).fold(
-        error => Task.succeed(List(BadMoveRequest(error))),
+        error => Task.succeed(List(BadMoveRequest(error, game.gameId, attempt.userId))),
         newGameState => {
           for {
             _ <- saveMove(attempt)
             _ <- gameRef.set(newGameState)
           } yield {
-            List(StateChanged())
+            List(StateChanged(game.gameId))
           }
         }
       )
@@ -57,10 +56,20 @@ class GameStream(gameRef: RefM[Game]) {
     }
   }
 
+  private def handleConcede(request: Concede): Task[List[GomokuResponse]] = {
+    for {
+      game <- gameRef.get
+      newState = game.removePlayer(request.userId)
+      _ <- gameRef.set(newState)
+    } yield {
+      List(StateChanged(game.gameId))
+    }
+  }
+
   def processRequest(req: GomokuRequest): Task[List[GomokuResponse]] = {
     req match {
       case m @ MakeMove(_, _, _, _, _) => handleMakeMove(m)
-      case Concede(userId, gameId) => ???
+      case m @ Concede(_, _) => handleConcede(m)
     }
   }
 
