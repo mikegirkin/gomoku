@@ -79,7 +79,7 @@ case class Game(
   }
 
   def removePlayer(userId: UUID): Game = {
-    if (!this.status.isInstanceOf[Active]) {
+    if (this.status.isInstanceOf[Finished]) {
       this
     } else if(players.contains(userId)) {
       this.copy(status = Finished(PlayerQuit(getPlayerNumber(userId))))

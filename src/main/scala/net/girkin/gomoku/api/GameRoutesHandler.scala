@@ -6,7 +6,7 @@ import cats.implicits._
 import io.circe.syntax._
 import fs2._
 import net.girkin.gomoku.api.ApiObjects._
-import net.girkin.gomoku.game.{GameServer, GameStore}
+import net.girkin.gomoku.game.{GameConcierge, GameStore}
 import net.girkin.gomoku.{AuthUser, Logging}
 import org.http4s._
 import org.http4s.circe._
@@ -19,7 +19,7 @@ import zio.Task
 import zio.interop.catz._
 
 class GameRoutesHandler (
-  gameServer: GameServer,
+  gameServer: GameConcierge,
   gameStore: GameStore,
   userChannels: OutboundChannels
 ) extends Http4sDsl[Task] with Logging {

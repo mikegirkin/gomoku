@@ -34,6 +34,7 @@ object GomokuResponse {
 class GameStream(gameRef: RefM[Game]) {
 
   def saveMove(move: MakeMove): Task[GomokuResponse] = {
+    //FIXME:
     ???
   }
 
@@ -78,4 +79,8 @@ class GameStream(gameRef: RefM[Game]) {
       in.evalMap(processRequest).flatMap(Stream.emits)
     }
   }
+}
+
+class Concierge() {
+
 }

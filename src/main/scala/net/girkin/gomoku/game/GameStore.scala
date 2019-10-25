@@ -4,7 +4,7 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 import anorm.Macro.ColumnNaming
-import net.girkin.gomoku.Database
+import net.girkin.gomoku.{AuthUser, Database}
 import zio.{IO, Ref}
 
 case class GameStoreRecord(
@@ -18,6 +18,7 @@ case class GameStoreRecord(
 
 trait GameStore {
   def getGamesAwaitingPlayers(): IO[Throwable, List[Game]]
+  def getActiveGameForPlayer(user: AuthUser): IO[Nothing, Option[Game]]
   def saveGameRecord(game: Game): IO[Throwable, Unit]
   def getGame(id: UUID): IO[Throwable, Option[Game]]
 }
@@ -26,6 +27,13 @@ class InmemGameStore(activeGames: Ref[List[Game]]) extends GameStore {
   override def getGamesAwaitingPlayers(): IO[Throwable, List[Game]] = {
     activeGames.get.map {
       _.filter { _.status == WaitingForUsers }
+    }
+  }
+
+
+  override def getActiveGameForPlayer(user: AuthUser): IO[Nothing, Option[Game]] = {
+    activeGames.get.map {
+      _.find { game => game.status.isInstanceOf[Active] && game.players.contains() }
     }
   }
 

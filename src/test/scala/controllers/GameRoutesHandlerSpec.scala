@@ -31,7 +31,7 @@ class GameRoutesHandlerSpec extends WordSpec
     val gameService = new Routes(
       authService,
       new GameRoutesHandler(
-        new GameServerImpl(store),
+        new GameConciergeImpl(store),
         store,
         rt.unsafeRun(channelStore)
       ),
@@ -98,7 +98,7 @@ class GameRoutesHandlerSpec extends WordSpec
     val gameService = new Routes(
       authService,
       new GameRoutesHandler(
-        new GameServerImpl(store),
+        new GameConciergeImpl(store),
         store,
         rt.unsafeRun(channelStore)
       )
