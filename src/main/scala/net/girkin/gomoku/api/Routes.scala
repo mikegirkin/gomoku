@@ -4,7 +4,7 @@ import java.util.UUID
 
 import cats.implicits._
 import net.girkin.gomoku.{Auth, AuthUser}
-import org.http4s.AuthedService
+import org.http4s.AuthedRoutes
 import org.http4s.dsl.Http4sDsl
 import zio.Task
 import zio.interop.catz._
@@ -27,7 +27,7 @@ class Routes(
 ) extends Http4sDsl[Task] {
 
   val gameRoutes = authService.secured(
-    AuthedService[AuthUser, Task] {
+    AuthedRoutes.of[AuthUser, Task] {
       case GET -> Root as token => gameService.gameApp(token)
       case GET -> Root / UUIDVar(gameId) as token => gameService.game(token, gameId)
       case POST -> Root / "join" as token => gameService.joinRandomGame(token)
@@ -35,10 +35,10 @@ class Routes(
   )
 
   val webSocketRoutes = authService.secured(
-    AuthedService[AuthUser, Task] {
+    AuthedRoutes.of[AuthUser, Task] {
       case GET -> Root / "ws" as token => gameService.handleSocketRequest(token)
     }
   )
 
-  val service = webSocketRoutes <+> gameRoutes
+  val service = webSocketRoutes orElse gameRoutes
 }

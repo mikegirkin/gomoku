@@ -31,11 +31,13 @@ class GameRoutesHandler (
   }
 
   def game(userToken: AuthUser, gameId: UUID): Task[Response[Task]] = {
-    gameStore.getGame(gameId).flatMap(_.fold(
-      NotFound()
-    ) {
-      game => Ok(game.asJson)
-    })
+    gameStore.getGame(gameId).foldM(
+      { error => InternalServerError() },
+      gameOpt => gameOpt.fold(
+        NotFound()
+      ) {
+        game => Ok(game.asJson)
+      })
   }
 
   def joinRandomGame(token: AuthUser): Task[Response[Task]] = {

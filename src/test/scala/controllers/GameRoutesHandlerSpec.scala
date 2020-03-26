@@ -12,16 +12,18 @@ import net.girkin.gomoku.{Auth, AuthUser, Constants}
 import org.http4s._
 import org.http4s.server.Router
 import org.http4s.syntax.all._
-import org.scalatest.{Inside, MustMatchers, WordSpec}
+import org.scalatest.{Inside}
+import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.matchers.must.Matchers
 import zio.interop.catz._
-import zio.{DefaultRuntime, Ref, Task}
+import zio.{Ref, Task, ZIO}
 
-class GameRoutesHandlerSpec extends WordSpec
-  with MustMatchers
+class GameRoutesHandlerSpec extends AnyWordSpec
+  with Matchers
   with Inside {
 
   implicit val ec = scala.concurrent.ExecutionContext.global
-  implicit val rt = new DefaultRuntime {}
+  implicit val rt = zio.Runtime.default
 
   "GameController 'JoinRandomGame'" should {
     val ref = Ref.make[List[Game]](List.empty)

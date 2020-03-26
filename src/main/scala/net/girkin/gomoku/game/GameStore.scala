@@ -16,20 +16,21 @@ case class GameStoreRecord(
   status: String
 )
 
+case class StoreError(exception: Exception)
+
 trait GameStore {
-  def getGamesAwaitingPlayers(): IO[Throwable, List[Game]]
-  def getActiveGameForPlayer(user: AuthUser): IO[Nothing, Option[Game]]
-  def saveGameRecord(game: Game): IO[Throwable, Unit]
-  def getGame(id: UUID): IO[Throwable, Option[Game]]
+  def getGamesAwaitingPlayers(): IO[StoreError, List[Game]]
+  def getActiveGameForPlayer(user: AuthUser): IO[StoreError, Option[Game]]
+  def saveGameRecord(game: Game): IO[StoreError, Unit]
+  def getGame(id: UUID): IO[StoreError, Option[Game]]
 }
 
 class InmemGameStore(activeGames: Ref[List[Game]]) extends GameStore {
-  override def getGamesAwaitingPlayers(): IO[Throwable, List[Game]] = {
+  override def getGamesAwaitingPlayers(): IO[Nothing, List[Game]] = {
     activeGames.get.map {
       _.filter { _.status == WaitingForUsers }
     }
   }
-
 
   override def getActiveGameForPlayer(user: AuthUser): IO[Nothing, Option[Game]] = {
     activeGames.get.map {
@@ -37,7 +38,7 @@ class InmemGameStore(activeGames: Ref[List[Game]]) extends GameStore {
     }
   }
 
-  override def saveGameRecord(game: Game): IO[Throwable, Unit] = {
+  override def saveGameRecord(game: Game): IO[Nothing, Unit] = {
     activeGames.update { gameList =>
       if(gameList.exists(_.gameId == game.gameId)) {
         gameList.map { item =>
@@ -50,7 +51,7 @@ class InmemGameStore(activeGames: Ref[List[Game]]) extends GameStore {
     }.unit
   }
 
-  override def getGame(id: UUID): IO[Throwable, Option[Game]] = {
+  override def getGame(id: UUID): IO[Nothing, Option[Game]] = {
     activeGames.get.map { games =>
       games.find {
         _.gameId == id

@@ -3,7 +3,7 @@ package net.girkin.gomoku.api
 import fs2.concurrent.Queue
 import net.girkin.gomoku.{AuthUser, FunctionalLogging}
 import org.http4s.websocket.WebSocketFrame
-import zio.{IO, RefM, Task}
+import zio.{IO, RefM, Task, UIO}
 import zio.interop.catz._
 
 final case class NoSuchUserChannel(user: AuthUser) extends Exception
@@ -43,13 +43,13 @@ class OutboundChannels(
 
   def removeOutboundUserChannel(user: AuthUser): Task[Unit] = {
     for {
-      _ <- userChannels.update(m => Task.succeed(m.filterKeys(key => key != user)))
+      _ <- userChannels.update(m => Task.succeed(m.view.filterKeys(key => key != user).toMap))
     } yield {
       ()
     }
   }
 
-  def activeUsers(): Task[List[AuthUser]] = {
+  def activeUsers(): UIO[List[AuthUser]] = {
     for {
       channels <- userChannels.get
     } yield {

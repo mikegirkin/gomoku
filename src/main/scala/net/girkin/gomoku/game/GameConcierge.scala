@@ -24,11 +24,15 @@ case class JoinGameError(
   reason: String
 )
 
-case class NoSuchGameError()
+sealed trait LeaveGameError extends Product with Serializable
+object LeaveGameError {
+  case object NoSuchGameError extends LeaveGameError
+  final case class StoreError(exception: Exception) extends LeaveGameError
+}
 
 trait GameConcierge {
   def joinRandomGame(userId: UUID): IO[JoinGameError, JoinGameSuccess]
-  def leaveGame(user: AuthUser): UIO[LeaveGameSuccess]
+  def leaveGame(user: AuthUser): IO[LeaveGameError, LeaveGameSuccess]
 }
 
 class GameConciergeImpl(
@@ -51,31 +55,39 @@ class GameConciergeImpl(
     }
 
     gameF.mapError(
-      exc => JoinGameError(exc.getMessage)
+      exc => JoinGameError(exc.exception.getMessage)
     )
   }
 
-  override def leaveGame(user: AuthUser): IO[NoSuchGameError, LeaveGameSuccess] = {
-
-
-    for {
-      gameOpt <- gameStore.getActiveGameForPlayer(user)
+  override def leaveGame(user: AuthUser): IO[LeaveGameError, LeaveGameSuccess] = {
+    val resultF: IO[LeaveGameError, LeaveGameSuccess] = for {
+      gameOpt <- gameStore.getActiveGameForPlayer(user).mapError(storeError => LeaveGameError.StoreError(storeError.exception))
       result <- gameOpt match {
         case Some(game) => game.status match {
           case WaitingForUsers => {
             val newGameState = game.removePlayer(user.userId)
-            gameStore.saveGameRecord(newGameState)
+            gameStore.saveGameRecord(newGameState).bimap[LeaveGameError, LeaveGameSuccess](
+              err => LeaveGameError.StoreError(err.exception),
+              _ => LeaveGameSuccess(newGameState.gameId)
+            )
           }
           case Active(awaitingMoveFrom) => {
-
+            val newGameState = game.removePlayer(user.userId)
+            gameStore.saveGameRecord(newGameState).bimap[LeaveGameError, LeaveGameSuccess](
+              err => LeaveGameError.StoreError(err.exception),
+              _ => LeaveGameSuccess(newGameState.gameId)
+            )
           }
-          case Finished(reason) =>
+          case Finished(reason) => {
+            IO.fail[LeaveGameError](LeaveGameError.NoSuchGameError)
+          }
         }
-        case None => IO.fail(NoSuchGameError)
+        case None => IO.fail[LeaveGameError](LeaveGameError.NoSuchGameError)
       }
-
     } yield {
       result
     }
+
+    resultF
   }
 }

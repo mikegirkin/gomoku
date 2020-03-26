@@ -3,20 +3,19 @@ package net.girkin.gomoku
 import java.util.UUID
 
 import net.girkin.gomoku.game.{Game, InmemGameStore}
-import org.scalatest.{Assertion, Matchers, WordSpec}
-import zio.{Ref, Task, DefaultRuntime}
+import org.scalatest.{Assertion}
+import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.matchers.should.Matchers
 
-class InmemGameStoreSpec extends WordSpec with Matchers {
-  val env = new DefaultRuntime {}
+import zio.{Ref, Task}
+
+class InmemGameStoreSpec extends AnyWordSpec with Matchers {
+  val env = zio.Runtime.default
 
   def io(test: => Task[Assertion]): Unit = {
     env.unsafeRun(test)
   }
 
-//  def withIO[A](m: Task[A])(test: A => Task[Assertion]): Unit = {
-//    m.flatMap(test).unsafeRunSync()
-//  }
-//
   def createStore: Task[InmemGameStore] = {
     Ref.make[List[Game]](List.empty).map {
       x => new InmemGameStore(x)

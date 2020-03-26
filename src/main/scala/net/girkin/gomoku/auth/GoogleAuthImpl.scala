@@ -51,7 +51,7 @@ class GoogleAuthImpl[Eff[_]: Effect](
     val nonce = UUID.randomUUID().toString
 
     SeeOther(
-      Location(Uri.uri("https://accounts.google.com/o/oauth2/v2/auth").setQueryParams(
+      Location(Uri.uri("https://accounts.google.com/o/oauth2/v2/auth").withQueryParams(
         Map[String, String](
           "client_id" -> config.googleClientId,
           "response_type" -> "code",
@@ -59,7 +59,7 @@ class GoogleAuthImpl[Eff[_]: Effect](
           "redirect_uri" -> s"$REDIRECT_AFTER_LOGIN_TO",
           "state" -> state,
           "nonce" -> nonce
-        ).mapValues(s => Seq(s))
+        )
       ))
     ).map {
       _.addCookie(ResponseCookie(

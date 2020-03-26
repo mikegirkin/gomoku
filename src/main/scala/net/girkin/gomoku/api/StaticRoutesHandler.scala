@@ -3,7 +3,7 @@ package net.girkin.gomoku.api
 import java.io.File
 import java.nio.file.Paths
 
-import cats.effect.{ContextShift, Effect}
+import cats.effect.{Blocker, ContextShift, Effect}
 import net.girkin.gomoku.Logging
 import org.http4s.dsl.Http4sDsl
 import org.http4s.{HttpRoutes, Response, StaticFile}
@@ -11,7 +11,7 @@ import org.http4s.{HttpRoutes, Response, StaticFile}
 import scala.concurrent.ExecutionContext
 
 
-class StaticRoutesHandler[F[_]: Effect : ContextShift] extends Http4sDsl[F] with Logging {
+class StaticRoutesHandler[F[_]: Effect : ContextShift](ec: ExecutionContext) extends Http4sDsl[F] with Logging {
   val service = HttpRoutes.of[F] {
     case GET -> file => serveStatic(file.toList.mkString("/"))
   }
@@ -22,7 +22,7 @@ class StaticRoutesHandler[F[_]: Effect : ContextShift] extends Http4sDsl[F] with
       new File(
         Paths.get(currentDir.toString, "static", file).toString
       ),
-      ExecutionContext.global
+      Blocker.liftExecutionContext(ec)
     ).getOrElseF {
       val path =Paths.get(System.getProperty("user.dir"), "static", file).toString
       logger.warn(s"Failed to load file $file from $path")

@@ -1,5 +1,7 @@
 package net.girkin.gomoku
 
+import java.util.concurrent.Executors
+
 import cats.data.{Kleisli, OptionT}
 import cats.effect._
 import net.girkin.gomoku.api.{GameRoutesHandler, OutboundChannels, Routes, StaticRoutesHandler}
@@ -28,7 +30,8 @@ object Starter extends App with Http4sDsl[Task] {
     val userStore = Services.userStore
     val authService = Services.authService
     val googleAuthService = Services.googleAuthService(userStore, client)
-    val staticService = new StaticRoutesHandler[Task]()
+    val staticExecutionContext = scala.concurrent.ExecutionContext.fromExecutor(Executors.newFixedThreadPool(4))
+    val staticService = new StaticRoutesHandler[Task](staticExecutionContext)
 
     val app: ZIO[A, Throwable, Unit] = for {
       gameService <- Services.gameService(authService)
@@ -54,16 +57,14 @@ object Starter extends App with Http4sDsl[Task] {
     app
   }
 
-  type AppEnvironment = Clock
+  override def run(args: List[String]): ZIO[Clock, Nothing, Int] = {
 
-  override def run(args: List[String]): ZIO[Environment, Nothing, Int] = {
-
-    val environment = ZIO.runtime[AppEnvironment]
+    val environment = ZIO.runtime[Unit]
     val server = environment.flatMap { env =>
       buildForRuntime(env)
     }
 
-    val program = server.provideSome[Environment] { _ => new Clock.Live {} }
+    val program = server.provide(())
 
     program.foldM(
       err => {
@@ -90,7 +91,7 @@ object Services {
 
   def gameService(
     authService: Auth[Task]
-  ): Task[Kleisli[OptionT[Task, ?], Request[Task], Response[Task]]] = {
+  ) /*: Task[Kleisli[OptionT[Task, ?], Request[Task], Response[Task]]] */= {
     for {
       ref <- zio.Ref.make(List.empty[Game])
       userChannels <- OutboundChannels.make()
