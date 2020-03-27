@@ -12,11 +12,11 @@ import net.girkin.gomoku.{Auth, AuthUser, Constants}
 import org.http4s._
 import org.http4s.server.Router
 import org.http4s.syntax.all._
-import org.scalatest.{Inside}
-import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.Inside
 import org.scalatest.matchers.must.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 import zio.interop.catz._
-import zio.{Ref, Task, ZIO}
+import zio.{Ref, Task}
 
 class GameRoutesHandlerSpec extends AnyWordSpec
   with Matchers

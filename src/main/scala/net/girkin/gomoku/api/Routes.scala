@@ -23,22 +23,22 @@ object UUIDVar extends ArbitratyPathVar[UUID](s => UUID.fromString(s))
 
 class Routes(
   authService: Auth[Task],
-  gameService: GameRoutesHandler,
+  gameRoutesHandler: GameRoutesHandler,
 ) extends Http4sDsl[Task] {
 
   val gameRoutes = authService.secured(
     AuthedRoutes.of[AuthUser, Task] {
-      case GET -> Root as token => gameService.gameApp(token)
-      case GET -> Root / UUIDVar(gameId) as token => gameService.game(token, gameId)
-      case POST -> Root / "join" as token => gameService.joinRandomGame(token)
+      case POST -> Root / "join" as token => gameRoutesHandler.joinRandomGame(token)
+      case GET -> Root / UUIDVar(gameId) as token => gameRoutesHandler.game(token, gameId)
+      case GET -> Root as token => gameRoutesHandler.gameApp(token)
     }
   )
 
   val webSocketRoutes = authService.secured(
     AuthedRoutes.of[AuthUser, Task] {
-      case GET -> Root / "ws" as token => gameService.handleSocketRequest(token)
+      case GET -> Root / "ws" as token => gameRoutesHandler.handleSocketRequest(token)
     }
   )
 
-  val service = webSocketRoutes orElse gameRoutes
+  val service = webSocketRoutes.combineK(gameRoutes)
 }

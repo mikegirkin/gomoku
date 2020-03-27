@@ -2,12 +2,12 @@ package net.girkin.gomoku
 
 import java.util.concurrent.Executors
 
-import cats.data.{Kleisli, OptionT}
 import cats.effect._
 import net.girkin.gomoku.api.{GameRoutesHandler, OutboundChannels, Routes, StaticRoutesHandler}
 import net.girkin.gomoku.auth.{AuthPrimitives, GoogleAuthImpl, SecurityConfiguration}
 import net.girkin.gomoku.game.{Game, GameConciergeImpl, InmemGameStore}
 import net.girkin.gomoku.users.{PsqlAnormUserStore, UserStore}
+import org.http4s.HttpRoutes
 import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.dsl.Http4sDsl
@@ -15,7 +15,6 @@ import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
 import org.http4s.server.middleware.Logger
 import org.http4s.syntax.all._
-import org.http4s.{HttpRoutes, Request, Response}
 import zio.clock.Clock
 import zio.interop.catz._
 import zio.interop.catz.implicits._
@@ -36,13 +35,13 @@ object Starter extends App with Http4sDsl[Task] {
     val app: ZIO[A, Throwable, Unit] = for {
       gameService <- Services.gameService(authService)
       httpRoutes = Router[Task](
-        "/" -> gameService,
         "/auth/google" -> googleAuthService.service,
         "/auth" -> authService.service,
         "/static" -> staticService.service,
         "/healthcheck" -> HttpRoutes.of[Task] {
           case GET -> Root => Ok("HEALTHCHECK")
-        }
+        },
+        "/" -> gameService
       ).orNotFound
       server <- BlazeServerBuilder[Task]
         .bindHttp(Constants.port, "0.0.0.0")
@@ -91,10 +90,10 @@ object Services {
 
   def gameService(
     authService: Auth[Task]
-  ) /*: Task[Kleisli[OptionT[Task, ?], Request[Task], Response[Task]]] */= {
+  ): Task[HttpRoutes[Task]] /*: Task[Kleisli[OptionT[Task, ?], Request[Task], Response[Task]]] */= {
     for {
-      ref <- zio.Ref.make(List.empty[Game])
       userChannels <- OutboundChannels.make()
+      ref <- zio.Ref.make(List.empty[Game])
       gameStore = new InmemGameStore(ref)
       gameService = new GameRoutesHandler(
         new GameConciergeImpl(

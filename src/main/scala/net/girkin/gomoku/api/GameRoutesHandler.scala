@@ -19,7 +19,7 @@ import zio.Task
 import zio.interop.catz._
 
 class GameRoutesHandler (
-  gameServer: GameConcierge,
+  concierge: GameConcierge,
   gameStore: GameStore,
   userChannels: OutboundChannels
 ) extends Http4sDsl[Task] with Logging {
@@ -41,7 +41,7 @@ class GameRoutesHandler (
   }
 
   def joinRandomGame(token: AuthUser): Task[Response[Task]] = {
-    gameServer.joinRandomGame(token.userId).fold[Task[Response[Task]]](
+    concierge.joinRandomGame(token.userId).fold[Task[Response[Task]]](
       error => BadRequest(""),
       ok => Ok(ok.asJson)
     ).flatten
