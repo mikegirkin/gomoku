@@ -4,7 +4,7 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 import cats.Id
-import net.girkin.gomoku.api.{GameRoutesHandler, OutboundChannels, Routes}
+import net.girkin.gomoku.api.{GameRoutesHandler, OutboundChannels, GameRoutes}
 import net.girkin.gomoku.auth.AuthPrimitives
 import net.girkin.gomoku.game._
 import net.girkin.gomoku.users.User
@@ -30,7 +30,7 @@ class GameRoutesHandlerSpec extends AnyWordSpec
     val store = new InmemGameStore(rt.unsafeRun(ref))
     val channelStore = OutboundChannels.make()
     val authService = new Auth[Task](new AuthPrimitives[Task])
-    val gameService = new Routes(
+    val gameService = new GameRoutes(
       authService,
       new GameRoutesHandler(
         new GameConciergeImpl(store),
@@ -97,7 +97,7 @@ class GameRoutesHandlerSpec extends AnyWordSpec
     val store = new InmemGameStore(rt.unsafeRun(ref))
     val authService = new Auth[Task](new AuthPrimitives[Task])
     val channelStore = OutboundChannels.make()
-    val gameService = new Routes(
+    val gameService = new GameRoutes(
       authService,
       new GameRoutesHandler(
         new GameConciergeImpl(store),

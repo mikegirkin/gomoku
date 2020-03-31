@@ -1,8 +1,9 @@
 package net.girkin.gomoku.game
 
+import java.time.{Instant, ZonedDateTime}
 import java.util.UUID
 
-import cats.effect.IO
+import cats.implicits._
 
 sealed trait PlayerNumber {
   def asInt: Int
@@ -63,28 +64,30 @@ object GameField {
 
 case class Game(
   gameId: UUID,
-  players: List[UUID],
+  player1: Option[UUID],
+  player2: Option[UUID],
   status: GameStatus,
   winningCondition: Int,
-  field: GameField
+  field: GameField,
+  createdAt: Instant
 ) {
+  def players = List(player1, player2).flatten
+
   def addPlayer(user: UUID): Game = {
-    if(players.isEmpty) {
-      this.copy(players = user :: players)
-    } else if(players.size == 1) {
-      this.copy(players = List(players.head, user), status = Active(PlayerNumber.First))
-    } else {
-      this
-    }
+    if(player1.isEmpty) this.copy(player1 = Some(user))
+    else if (player2.isEmpty) this.copy(player2 = Some(user))
+    else this
   }
 
   def removePlayer(userId: UUID): Game = {
     if (this.status.isInstanceOf[Finished]) {
       this
-    } else if(players.contains(userId)) {
-      this.copy(status = Finished(PlayerQuit(getPlayerNumber(userId))))
     } else {
-      this
+      getPlayerNumber(userId).fold(
+        this
+      ) { playerNumber =>
+        this.copy(status = Finished(PlayerQuit(playerNumber)))
+      }
     }
   }
 
@@ -107,17 +110,19 @@ case class Game(
     }
   }
 
-  def getPlayerNumber(userId: UUID): PlayerNumber = {
-    if(players(0) == userId) PlayerNumber.First
-    else PlayerNumber.Second
+  def getPlayerNumber(userId: UUID): Option[PlayerNumber] = {
+    if(player1.contains(userId)) Some(PlayerNumber.First)
+    else if(player2.contains(userId)) Some(PlayerNumber.Second)
+    else Option.empty
   }
 
   def makeMove(move: MoveAttempt): Either[MoveError, Game] = {
-    isMoveWrong(move).toLeft {
-      val currentUserNumber = getPlayerNumber(move.userId)
-      val newFieldState = this.field.update(move.row, move.column, Some(currentUserNumber))
-      val gameWithUpdatedField = this.copy(field = newFieldState)
-      val newStatus: GameStatus = gameWithUpdatedField.winner() match {
+    for {
+      _ <- isMoveWrong(move).toLeft(())
+      currentUserNumber <- getPlayerNumber(move.userId).toRight(ImpossibleMove(s"Player ${move.userId} couldn't make this move"))
+      newFieldState = this.field.update(move.row, move.column, Some(currentUserNumber))
+      gameWithUpdatedField = this.copy(field = newFieldState)
+      newStatus: GameStatus = gameWithUpdatedField.winner() match {
         case Some(winner) => Finished(PlayerWon(winner))
         case None => if(gameWithUpdatedField.isDraw()) {
           Finished(Draw)
@@ -125,6 +130,7 @@ case class Game(
           Active(currentUserNumber.other)
         }
       }
+    } yield  {
       gameWithUpdatedField.copy(
         status = newStatus
       )
@@ -175,9 +181,11 @@ case class Game(
 object Game {
   def create(height: Int, width: Int, winningCondition: Int): Game = new Game(
     UUID.randomUUID(),
-    List.empty,
+    None,
+    None,
     WaitingForUsers,
     winningCondition,
-    GameField(height, width)
+    GameField(height, width),
+    Instant.now()
   )
 }

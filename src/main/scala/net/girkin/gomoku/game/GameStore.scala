@@ -1,11 +1,13 @@
 package net.girkin.gomoku.game
 
+import java.sql.Connection
 import java.time.LocalDateTime
 import java.util.UUID
 
 import anorm.Macro.ColumnNaming
+import net.girkin.gomoku.game.GameStoreRecord.Status
 import net.girkin.gomoku.{AuthUser, Database}
-import zio.{IO, Ref}
+import zio.IO
 
 case class GameStoreRecord(
   id: UUID,
@@ -13,83 +15,86 @@ case class GameStoreRecord(
   user1: Option[UUID],
   user2: Option[UUID],
   winningCondition: Int,
-  status: String
+  status: Status.Status
 )
+
+object GameStoreRecord {
+  object Status extends Enumeration {
+    type Status = Value
+    val Awaiting, Finished, Active = Value
+  }
+
+  def fromGame(game: Game): GameStoreRecord = {
+
+  }
+}
 
 case class StoreError(exception: Exception)
 
 trait GameStore {
-  def getGamesAwaitingPlayers(): IO[StoreError, List[Game]]
-  def getActiveGameForPlayer(user: AuthUser): IO[StoreError, Option[Game]]
-  def saveGameRecord(game: Game): IO[StoreError, Unit]
-  def getGame(id: UUID): IO[StoreError, Option[Game]]
-}
-
-class InmemGameStore(activeGames: Ref[List[Game]]) extends GameStore {
-  override def getGamesAwaitingPlayers(): IO[Nothing, List[Game]] = {
-    activeGames.get.map {
-      _.filter { _.status == WaitingForUsers }
-    }
-  }
-
-  override def getActiveGameForPlayer(user: AuthUser): IO[Nothing, Option[Game]] = {
-    activeGames.get.map {
-      _.find { game => game.status.isInstanceOf[Active] && game.players.contains() }
-    }
-  }
-
-  override def saveGameRecord(game: Game): IO[Nothing, Unit] = {
-    activeGames.update { gameList =>
-      if(gameList.exists(_.gameId == game.gameId)) {
-        gameList.map { item =>
-          if (item.gameId == game.gameId) game
-          else item
-        }
-      } else {
-        game :: gameList
-      }
-    }.unit
-  }
-
-  override def getGame(id: UUID): IO[Nothing, Option[Game]] = {
-    activeGames.get.map { games =>
-      games.find {
-        _.gameId == id
-      }
-    }
-}
+  def getGamesAwaitingPlayers(): IO[StoreError, List[GameStoreRecord]]
+  def getActiveGameForPlayer(user: AuthUser): IO[StoreError, Option[GameStoreRecord]]
+  def saveGameRecord(game: GameStoreRecord): IO[StoreError, Unit]
+  def getGame(id: UUID): IO[StoreError, Option[GameStoreRecord]]
 }
 
 class PsqlGameStore(
   db:  Database
-) {
+) extends GameStore {
 
   import anorm._
 
-  val storeRecordParser = Macro.namedParser[GameStoreRecord](ColumnNaming.SnakeCase)
-
-  def getGamesAwaitingPlayers(): IO[Throwable, List[Game]] = IO {
-    db.withConnection { implicit cn =>
-      SQL"select * from games where status='awaiting'"
-        .as(storeRecordParser.*)
-      ???
-    }
+  private implicit val statusColumn: Column[GameStoreRecord.Status.Status] =
+    Column.of[String].mapResult { result: String =>
+      if (result == GameStoreRecord.Status.Active.toString) Right(GameStoreRecord.Status.Active)
+      else if (result == GameStoreRecord.Status.Awaiting.toString) Right(GameStoreRecord.Status.Awaiting)
+      else if (result == GameStoreRecord.Status.Finished.toString) Right(GameStoreRecord.Status.Finished)
+      else Left(SqlRequestError(new Exception("Couldn't convert string to GameStoreRecord")))
   }
 
-  def saveGameRecord(
-    game: GameStoreRecord
-  ): IO[Throwable, Unit] = IO {
-    db.withConnection { implicit cn =>
-      SQL"""
-        insert into games (id, created_at, user_1, user_2, winning_condition, status)
-        values (${game.id}::uuid, ${game.createdAt}, ${game.user1}::uuid, ${game.user2}::uuid, ${game.winningCondition}, ${game.status})
-        on conflict(id) do update set
-          user_1 = excluded.user_1,
-          user_2 = excluded.user_2,
-          status = excluded.status
-      """.executeInsert(
-        anorm.SqlParser.scalar[java.util.UUID].singleOpt
-      )
-    }
+  val storeRecordParser = Macro.namedParser[GameStoreRecord](ColumnNaming.SnakeCase)
+
+  def dbIO[T](block: Connection => T): IO[StoreError, T] = IO {
+    db.withConnection { block }
+  }.mapError {
+    case exc: Exception => StoreError(exc)
+  }
+
+  def getGamesAwaitingPlayers(): IO[StoreError, List[GameStoreRecord]] = dbIO { implicit cn =>
+    SQL"select * from games where status = ${Status.Awaiting.toString}"
+      .as(storeRecordParser.*)
+  }
+
+  override def getActiveGameForPlayer(user: AuthUser): IO[StoreError, Option[GameStoreRecord]] = dbIO { implicit cn =>
+    SQL"""
+      select id, created_at, user_1, user_2, winning_condition, status
+      from games
+      where status in (${Status.Awaiting.toString}, ${Status.Active.toString})
+    """.as(
+      storeRecordParser.singleOpt
+    )
+  }
+
+  override def saveGameRecord(game: GameStoreRecord): IO[StoreError, Unit] = dbIO { implicit cn =>
+    SQL"""
+      insert into games (id, created_at, user_1, user_2, winning_condition, status)
+      values (${game.id}::uuid, ${game.createdAt}, ${game.user1}::uuid, ${game.user2}::uuid, ${game.winningCondition}, ${game.status.toString})
+      on conflict(id) do update set
+        user_1 = excluded.user_1,
+        user_2 = excluded.user_2,
+        status = excluded.status
+    """.executeInsert(
+      anorm.SqlParser.scalar[java.util.UUID].singleOpt
+    )
+  }.map(_ => ())
+
+  override def getGame(id: UUID): IO[StoreError, Option[GameStoreRecord]] = dbIO { implicit cn =>
+    SQL"""
+      select id, created_at, user_1, user_2, winning_condition, status
+      from games
+      where id = ${id}
+    """.as(
+      storeRecordParser.singleOpt
+    )
   }
 }

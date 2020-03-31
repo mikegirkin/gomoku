@@ -1,0 +1,16 @@
+@(channels: List[String])
+
+@_root_.views.html.layout(
+    "Gomoku - channels"
+) {
+    <h1>Debug / Channels</h1>
+    <div>
+        @for(
+            channel <- channels
+        ){
+            <div>
+                @channel
+            </div>
+        }
+    </div>
+}

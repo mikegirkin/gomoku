@@ -17,12 +17,28 @@ import org.http4s.websocket.WebSocketFrame
 import org.http4s.websocket.WebSocketFrame.{Close, Text}
 import zio.Task
 import zio.interop.catz._
+import zio._
 
 class GameRoutesHandler (
   concierge: GameConcierge,
   gameStore: GameStore,
   userChannels: OutboundChannels
 ) extends Http4sDsl[Task] with Logging {
+
+  def listChannels(token: AuthUser): Task[Response[Task]] = {
+    for {
+      channels <- userChannels.list()
+      channesData = channels.map {
+        case (user, queue) => s"User: ${user.userId}"
+      }.toList
+      html <- Ok(
+        views.html.debug.channels(channesData)
+      )
+    } yield {
+      html
+    }
+  }
+
 
   def gameApp(userToken: AuthUser): Task[Response[Task]] = {
     Ok(

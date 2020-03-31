@@ -3,7 +3,7 @@ package net.girkin.gomoku.api
 import fs2.concurrent.Queue
 import net.girkin.gomoku.{AuthUser, FunctionalLogging}
 import org.http4s.websocket.WebSocketFrame
-import zio.{IO, RefM, Task, UIO}
+import zio.{IO, RefM, Task, UIO, ZIO}
 import zio.interop.catz._
 
 final case class NoSuchUserChannel(user: AuthUser) extends Exception
@@ -20,6 +20,14 @@ class OutboundChannels(
           .getOrElse(IO.fail(NoSuchUserChannel(user)))
     } yield {
       result
+    }
+  }
+
+  def list(): UIO[Map[AuthUser, Queue[Task, WebSocketFrame]]] = {
+    for {
+      channels <- userChannels.get
+    } yield  {
+      channels
     }
   }
 
