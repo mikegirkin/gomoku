@@ -10,13 +10,13 @@ create table games (
   user_1 UUID references users(id),
   user_2 UUID references users(id),
   winning_condition integer not null,
-  status varchar not null
+  status json not null
 );
 
 create table moves (
   id UUID primary key,
   created_at timestamp not null,
   game_id UUID references games(id) not null,
-  is_left_user boolean not null,
+  user_id UUID references users(id) not null,
   move json not null
 );

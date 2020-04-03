@@ -3,8 +3,7 @@ package net.girkin.gomoku.game
 import java.util.UUID
 
 import net.girkin.gomoku.AuthUser
-import org.http4s.blaze.channel.nio1.NIO1SocketServerGroup
-import zio.{IO, UIO}
+import zio.IO
 
 object Ruleset {
   val height = 5

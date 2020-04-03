@@ -1,13 +1,13 @@
 package net.girkin.gomoku.game
 
+import anorm.Macro.ColumnNaming
+import io.circe.syntax._
 import java.sql.Connection
 import java.time.LocalDateTime
 import java.util.UUID
-
-import anorm.Macro.ColumnNaming
-import net.girkin.gomoku.game.GameStoreRecord.Status
 import net.girkin.gomoku.{AuthUser, Database}
 import zio.IO
+import net.girkin.gomoku.api.ApiObjects._
 
 case class GameStoreRecord(
   id: UUID,
@@ -15,27 +15,24 @@ case class GameStoreRecord(
   user1: Option[UUID],
   user2: Option[UUID],
   winningCondition: Int,
-  status: Status.Status
+  status: GameStatus
 )
 
-object GameStoreRecord {
-  object Status extends Enumeration {
-    type Status = Value
-    val Awaiting, Finished, Active = Value
-  }
-
-  def fromGame(game: Game): GameStoreRecord = {
-
-  }
-}
+case class MoveRecord(
+  id: UUID,
+  createdAt: LocalDateTime,
+  gameId: UUID,
+  userId: UUID,
+  move: MoveAttempt
+)
 
 case class StoreError(exception: Exception)
 
 trait GameStore {
-  def getGamesAwaitingPlayers(): IO[StoreError, List[GameStoreRecord]]
-  def getActiveGameForPlayer(user: AuthUser): IO[StoreError, Option[GameStoreRecord]]
-  def saveGameRecord(game: GameStoreRecord): IO[StoreError, Unit]
-  def getGame(id: UUID): IO[StoreError, Option[GameStoreRecord]]
+  def getGamesAwaitingPlayers(): IO[StoreError, List[Game]]
+  def getActiveGameForPlayer(user: AuthUser): IO[StoreError, Option[Game]]
+  def saveGameRecord(game: Game): IO[StoreError, Unit]
+  def getGame(id: UUID): IO[StoreError, Option[Game]]
 }
 
 class PsqlGameStore(
@@ -44,41 +41,67 @@ class PsqlGameStore(
 
   import anorm._
 
-  private implicit val statusColumn: Column[GameStoreRecord.Status.Status] =
-    Column.of[String].mapResult { result: String =>
-      if (result == GameStoreRecord.Status.Active.toString) Right(GameStoreRecord.Status.Active)
-      else if (result == GameStoreRecord.Status.Awaiting.toString) Right(GameStoreRecord.Status.Awaiting)
-      else if (result == GameStoreRecord.Status.Finished.toString) Right(GameStoreRecord.Status.Finished)
-      else Left(SqlRequestError(new Exception("Couldn't convert string to GameStoreRecord")))
+  private implicit val statusColumn: Column[GameStatus] = {
+    ???
+//    Column.of[String].mapResult { result: String =>
+//      if (result == GameStoreRecord.Status.Active.toString) Right(GameStoreRecord.Status.Active)
+//      else if (result == GameStoreRecord.Status.Awaiting.toString) Right(GameStoreRecord.Status.Awaiting)
+//      else if (result == GameStoreRecord.Status.Finished.toString) Right(GameStoreRecord.Status.Finished)
+//      else Left(SqlRequestError(new Exception("Couldn't convert string to GameStoreRecord")))
   }
 
   val storeRecordParser = Macro.namedParser[GameStoreRecord](ColumnNaming.SnakeCase)
 
-  def dbIO[T](block: Connection => T): IO[StoreError, T] = IO {
-    db.withConnection { block }
-  }.mapError {
-    case exc: Exception => StoreError(exc)
+  def dbIO[T](block: Connection => T): IO[StoreError, T] = {
+    IO {
+      db.withConnection {
+        block
+      }
+    }.mapError {
+      case exc: Exception => StoreError(exc)
+    }
   }
 
-  def getGamesAwaitingPlayers(): IO[StoreError, List[GameStoreRecord]] = dbIO { implicit cn =>
-    SQL"select * from games where status = ${Status.Awaiting.toString}"
-      .as(storeRecordParser.*)
+  private def fetchMoves(gameIds: List[UUID]): IO[StoreError, List[MoveRecord]] = {
+    ???
   }
 
-  override def getActiveGameForPlayer(user: AuthUser): IO[StoreError, Option[GameStoreRecord]] = dbIO { implicit cn =>
+  def getGamesAwaitingPlayers(): IO[StoreError, List[Game]] = {
+    val gameList = { cn: Connection =>
+      IO {
+        SQL"select * from games where status -> 'type' = ${WaitingForUsers.getClass.getSimpleName}"
+          .as(storeRecordParser.*)(cn)
+      }
+    }
+
+    val moves = { cn: Connection =>
+      IO {
+        SQL"select * from moves where game_id = "
+      }
+    }
+
+    ???
+
+  }
+
+  override def getActiveGameForPlayer(user: AuthUser): IO[StoreError, Option[Game]] = dbIO { implicit cn =>
+    WaitingForUsers.getClass.getSimpleName
     SQL"""
       select id, created_at, user_1, user_2, winning_condition, status
       from games
-      where status in (${Status.Awaiting.toString}, ${Status.Active.toString})
+      where status -> 'type' in (${WaitingForUsers.getClass.getSimpleName}, ${classOf[Active].getSimpleName})
     """.as(
       storeRecordParser.singleOpt
     )
+
+    ???
   }
 
-  override def saveGameRecord(game: GameStoreRecord): IO[StoreError, Unit] = dbIO { implicit cn =>
+  override def saveGameRecord(game: Game): IO[StoreError, Unit] = dbIO { implicit cn =>
+    val status = game.status.asJson.toString
     SQL"""
       insert into games (id, created_at, user_1, user_2, winning_condition, status)
-      values (${game.id}::uuid, ${game.createdAt}, ${game.user1}::uuid, ${game.user2}::uuid, ${game.winningCondition}, ${game.status.toString})
+      values (${game.gameId}::uuid, ${game.createdAt}, ${game.player1}::uuid, ${game.player2}::uuid, ${game.winningCondition}, ${status}::json)
       on conflict(id) do update set
         user_1 = excluded.user_1,
         user_2 = excluded.user_2,
@@ -88,7 +111,7 @@ class PsqlGameStore(
     )
   }.map(_ => ())
 
-  override def getGame(id: UUID): IO[StoreError, Option[GameStoreRecord]] = dbIO { implicit cn =>
+  override def getGame(id: UUID): IO[StoreError, Option[Game]] = dbIO { implicit cn =>
     SQL"""
       select id, created_at, user_1, user_2, winning_condition, status
       from games
@@ -96,5 +119,7 @@ class PsqlGameStore(
     """.as(
       storeRecordParser.singleOpt
     )
+
+    ???
   }
 }

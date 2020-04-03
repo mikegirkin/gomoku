@@ -5,10 +5,12 @@ import java.util.UUID
 import cats._
 import cats.implicits._
 import net.girkin.gomoku.game._
-import org.scalatest.{Inside, Inspectors, Matchers, WordSpec}
+import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.{Inside, Inspectors}
+import org.scalatest.matchers.should.Matchers
 
 
-class GameSpec extends WordSpec
+class GameSpec extends AnyWordSpec
   with Matchers with Inside with Inspectors {
 
   val firstUser = UUID.randomUUID()

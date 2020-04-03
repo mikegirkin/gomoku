@@ -1,47 +1,62 @@
 package net.girkin.gomoku.api
 
 import net.girkin.gomoku.game._
-import io.circe.generic.semiauto._
+import io.circe.generic.extras.semiauto._
 import io.circe._
+import io.circe.generic.extras.Configuration
 import io.circe.syntax._
 
 object ApiObjects {
 
-  implicit val playerNumberEncoder = Encoder.instance[PlayerNumber] { v =>
-    Json.fromInt(v.asInt)
-  }
+  private implicit val config: Configuration = Configuration.default.withDefaults.withDiscriminator("type")
 
-  implicit val gameFinishReasonEncoder = Encoder.instance[GameFinishReason] {
-    case Draw => Json.obj(
-      "_t" -> Json.fromString("Draw")
-    )
-    case PlayerQuit(playerNumber) => Json.obj(
-      "_t" -> Json.fromString("PlayerQuit"),
-      "player" -> playerNumber.asJson
-    )
-    case PlayerWon(playerNumber) => Json.obj(
-      "_t" -> Json.fromString("PlayerWon"),
-      "player" -> playerNumber.asJson
-    )
-  }
+  implicit val playerNumberEncoder = Codec.from(
+    Decoder.decodeInt.emapTry(PlayerNumber.fromInt),
+    Encoder.instance[PlayerNumber] { v =>
+      Json.fromInt(v.asInt)
+    }
+  )
+
+  implicit val gameFinishReasonCodec: Codec[GameFinishReason] = deriveConfiguredCodec[GameFinishReason]
 
   implicit val gameStatusEncoder = Encoder.instance[GameStatus] {
-    case WaitingForUsers => Json.obj("_t" -> Json.fromString("WaitingForUsers"))
+    case WaitingForUsers => Json.obj(
+      "type" -> Json.fromString("WaitingForUsers")
+    )
     case Active(awaitingMoveFrom) => Json.obj(
-      "_t" -> Json.fromString("Active"),
+      "type" -> Json.fromString("Active"),
       "awaitingMoveFrom" -> awaitingMoveFrom.asJson
     )
     case Finished(reason) => Json.obj(
-      "_t" -> Json.fromString("Finished"),
+      "type" -> Json.fromString("Finished"),
       "reason" -> reason.asJson
     )
   }
 
-  implicit val gameFieldEncoder = deriveEncoder[GameField]
+  implicit val gameStatusDecoder = ???
+  //  Decoder.instance[GameStatus] { cursor =>
+//    for {
+//      `type` <- cursor.get[String]("type")
+//      result <- `type` match {
+//        case "WaitingForUsers" => WaitingForUsers
+//        case "Active" => {
+//          cursor.get[Int]("awaitingMoveFrom").map { playerNumber =>
+//            Active(playerNumber)
+//          }
+//        }
+//        case "Finished" => {
+//          cursor.get[GameFinishReason].
+//        }
+//      }
+//    } yield {
+//      result
+//    }
+//  }
 
-  implicit val gameEncoder = deriveEncoder[Game]
+  implicit val gameFieldEncoder = deriveConfiguredEncoder[GameField]
+  implicit val gameEncoder = deriveConfiguredEncoder[Game]
 
-  implicit val joinGameSuccessEncoder = deriveEncoder[JoinGameSuccess]
-  implicit val joinGameErrorEncoder = deriveEncoder[JoinGameError]
+  implicit val joinGameSuccessEncoder = deriveConfiguredEncoder[JoinGameSuccess]
+  implicit val joinGameErrorEncoder = deriveConfiguredEncoder[JoinGameError]
 
 }

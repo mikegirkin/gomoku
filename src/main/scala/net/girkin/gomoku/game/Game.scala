@@ -5,6 +5,8 @@ import java.util.UUID
 
 import cats.implicits._
 
+import scala.util.{Failure, Success, Try}
+
 sealed trait PlayerNumber {
   def asInt: Int
   def other: PlayerNumber
@@ -19,12 +21,20 @@ object PlayerNumber {
     override def asInt: Int = 1
     override def other: PlayerNumber = First
   }
+
+  def fromInt(value: Int): Try[PlayerNumber] = {
+    value match {
+      case 0 => Success(PlayerNumber.First)
+      case 1 => Success(PlayerNumber.Second)
+      case _ => Failure(new IllegalArgumentException(s"PlayerNumber could only be created from 0 or 1. Provided: ${value}"))
+    }
+  }
 }
 
-trait GameFinishReason
-case class PlayerQuit(playerNumber: PlayerNumber) extends GameFinishReason
+sealed trait GameFinishReason extends Product with Serializable
+final case class PlayerQuit(playerNumber: PlayerNumber) extends GameFinishReason
 case object Draw extends GameFinishReason
-case class PlayerWon(playerNumber: PlayerNumber) extends GameFinishReason
+final case class PlayerWon(playerNumber: PlayerNumber) extends GameFinishReason
 
 sealed trait GameStatus
 case object WaitingForUsers extends GameStatus
@@ -71,7 +81,7 @@ case class Game(
   field: GameField,
   createdAt: Instant
 ) {
-  def players = List(player1, player2).flatten
+  def players: List[UUID] = List(player1, player2).flatten
 
   def addPlayer(user: UUID): Game = {
     if(player1.isEmpty) this.copy(player1 = Some(user))
