@@ -36,7 +36,8 @@ libraryDependencies ++= Seq(
   "org.reactormonk" %% "cryptobits"            % "1.3",
   "com.pauldijou"   %% "jwt-circe"             % "4.3.0",
 
-  "org.scalatest"   %% "scalatest"             % "3.1.1" % "test"
+  "org.scalatest"   %% "scalatest"             % "3.1.1" % Test,
+  "org.scalamock"   %% "scalamock"             % "4.4.0" % Test
 )
 
 // Adds additional packages into Twirl

@@ -85,7 +85,7 @@ case class Game(
 
   def addPlayer(user: UUID): Game = {
     if(player1.isEmpty) this.copy(player1 = Some(user))
-    else if (player2.isEmpty) this.copy(player2 = Some(user))
+    else if (player2.isEmpty) this.copy(player2 = Some(user), status = Active(PlayerNumber.First))
     else this
   }
 

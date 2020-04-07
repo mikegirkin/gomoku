@@ -1,10 +1,10 @@
 package controllers
 
-import java.time.LocalDateTime
+import java.time.{Instant, LocalDateTime}
 import java.util.UUID
 
 import cats.Id
-import net.girkin.gomoku.api.{GameRoutesHandler, OutboundChannels, GameRoutes}
+import net.girkin.gomoku.api.{GameRoutes, GameRoutesHandler, OutboundChannels}
 import net.girkin.gomoku.auth.AuthPrimitives
 import net.girkin.gomoku.game._
 import net.girkin.gomoku.users.User
@@ -12,37 +12,37 @@ import net.girkin.gomoku.{Auth, AuthUser, Constants}
 import org.http4s._
 import org.http4s.server.Router
 import org.http4s.syntax.all._
+import org.scalamock.scalatest.MockFactory
 import org.scalatest.Inside
 import org.scalatest.matchers.must.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import zio.interop.catz._
-import zio.{Ref, Task}
+import zio.{IO, Ref, Task}
 
 class GameRoutesHandlerSpec extends AnyWordSpec
-  with Matchers
-  with Inside {
+  with Matchers with Inside with MockFactory {
 
   implicit val ec = scala.concurrent.ExecutionContext.global
   implicit val rt = zio.Runtime.default
 
-  "GameController 'JoinRandomGame'" should {
-    val ref = Ref.make[List[Game]](List.empty)
-    val store = new InmemGameStore(rt.unsafeRun(ref))
+  trait Environment {
     val channelStore = OutboundChannels.make()
     val authService = new Auth[Task](new AuthPrimitives[Task])
+    val mockStore = mock[GameStore]
     val gameService = new GameRoutes(
       authService,
       new GameRoutesHandler(
-        new GameConciergeImpl(store),
-        store,
+        new GameConciergeImpl(mockStore),
+        mockStore,
         rt.unsafeRun(channelStore)
       ),
     ).service
-
     val service = Router[Task](
       "/" -> gameService
     ).orNotFound
+  }
 
+  "GameRoutesHandler 'JoinRandomGame'" should {
     val url = uri"/join"
 
     val user1 = User(UUID.randomUUID(), "test1@example.com", LocalDateTime.now)
@@ -57,44 +57,40 @@ class GameRoutesHandlerSpec extends AnyWordSpec
     val authenticatedRequest = joinRequest.addCookie(Constants.authCookieName, authPrimitives.signToken(authToken))
 
 
-    "return 403 when not authenticated" in {
+    "return 403 when not authenticated" in new Environment {
       val result = rt.unsafeRun(service.run(joinRequest))
 
       result.status mustBe Status.Forbidden
     }
 
-    "be able to join game when authenticated" in {
+    "be able to join game when authenticated" in new Environment {
+      (mockStore.getGamesAwaitingPlayers _).expects()
+        .returning(IO.succeed(List()))
+      (mockStore.saveGameRecord _).expects(where {
+        (game: Game) => game.player1.contains(user1.id) &&
+        game.status == WaitingForUsers
+      }).returning(IO.succeed(()))
+
       val result = rt.unsafeRun(service.run(authenticatedRequest))
 
       result.status mustBe Status.Ok
-      val gamesInStore = rt.unsafeRun(store.getGamesAwaitingPlayers())
-      gamesInStore must have size 1
-      inside(gamesInStore.head) {
-        case Game(_, players, status, _, _) =>
-          players must have size 1
-          players.head mustBe user1.id
-          status mustBe WaitingForUsers
-      }
     }
 
-    "be able to prevent player from signing up for the game if they are waiting for one" in {
+    "be able to prevent player from signing up for the game if they are waiting for one" in new Environment {
+      (mockStore.getGamesAwaitingPlayers _).expects()
+        .returning(IO.succeed(List(
+          Game(UUID.randomUUID(), Some(user1.id), None, WaitingForUsers, 5, GameField(5, 5), Instant.now())
+        )))
+
       val result = rt.unsafeRun(service.run(authenticatedRequest))
 
       result.status mustBe Status.Ok
-      val gamesInStore = rt.unsafeRun(store.getGamesAwaitingPlayers())
-      gamesInStore must have size 1
-      inside(gamesInStore.head) {
-        case Game(_, players, status, _, _) =>
-          players must have size 1
-          players.head mustBe user1.id
-          status mustBe WaitingForUsers
-      }
     }
   }
 
   "GameService 'wsEcho'" should {
     val ref = Ref.make[List[Game]](List.empty)
-    val store = new InmemGameStore(rt.unsafeRun(ref))
+    val store = mock[GameStore]
     val authService = new Auth[Task](new AuthPrimitives[Task])
     val channelStore = OutboundChannels.make()
     val gameService = new GameRoutes(

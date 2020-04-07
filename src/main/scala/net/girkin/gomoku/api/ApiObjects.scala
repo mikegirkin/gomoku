@@ -10,7 +10,7 @@ object ApiObjects {
 
   private implicit val config: Configuration = Configuration.default.withDefaults.withDiscriminator("type")
 
-  implicit val playerNumberEncoder = Codec.from(
+  implicit val playerNumberCodec: Codec[PlayerNumber] = Codec.from(
     Decoder.decodeInt.emapTry(PlayerNumber.fromInt),
     Encoder.instance[PlayerNumber] { v =>
       Json.fromInt(v.asInt)
@@ -19,7 +19,7 @@ object ApiObjects {
 
   implicit val gameFinishReasonCodec: Codec[GameFinishReason] = deriveConfiguredCodec[GameFinishReason]
 
-  implicit val gameStatusEncoder = Encoder.instance[GameStatus] {
+  implicit val gameStatusEncoder: Encoder[GameStatus] = Encoder.instance[GameStatus] {
     case WaitingForUsers => Json.obj(
       "type" -> Json.fromString("WaitingForUsers")
     )
@@ -33,7 +33,7 @@ object ApiObjects {
     )
   }
 
-  implicit val gameStatusDecoder = ???
+  //implicit val gameStatusDecoder: Codec[GameStatus] = ???
   //  Decoder.instance[GameStatus] { cursor =>
 //    for {
 //      `type` <- cursor.get[String]("type")

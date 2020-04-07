@@ -41,7 +41,8 @@ class GameSpec extends AnyWordSpec
     }
 
     val move1 = MoveAttempt(2, 2, firstUser)
-    val gameAfterMove1 = gameWithUsers.makeMove(move1).right.get
+    val result = gameWithUsers.makeMove(move1)
+    val gameAfterMove1 = result.toOption.get
 
     "be able to handle correct moves" in {
       gameAfterMove1.status shouldBe Active(PlayerNumber.Second)

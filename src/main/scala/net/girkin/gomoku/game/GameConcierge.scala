@@ -44,11 +44,13 @@ class GameConciergeImpl(
       gameToAddPlayer = games.headOption.getOrElse(
         Game.create(Ruleset.height, Ruleset.width, Ruleset.winningCondition)
       )
-      updatedGame = {
-        if (gameToAddPlayer.players.contains(userId)) gameToAddPlayer
-        else gameToAddPlayer.addPlayer(userId)
+      updatedGame <- {
+        if (gameToAddPlayer.players.contains(userId)) IO.succeed(gameToAddPlayer)
+        else {
+          val updatedGame = gameToAddPlayer.addPlayer(userId)
+          gameStore.saveGameRecord(updatedGame).map(_ => updatedGame)
+        }
       }
-      _ <- gameStore.saveGameRecord(updatedGame)
     } yield {
       JoinGameSuccess(updatedGame.gameId)
     }
