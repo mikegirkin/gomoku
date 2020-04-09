@@ -1,6 +1,6 @@
 package net.girkin.gomoku.users
 
-import java.time.LocalDateTime
+import java.time.Instant
 import java.util.UUID
 
 import anorm.Macro.ColumnNaming
@@ -10,7 +10,7 @@ import zio.Task
 case class User(
   id: UUID,
   email: String,
-  createdAt: LocalDateTime
+  createdAt: Instant
 )
 
 trait UserStore[F[_]] {
@@ -18,7 +18,7 @@ trait UserStore[F[_]] {
   def upsert(user: User): F[Unit]
 }
 
-class PsqlAnormUserStore (
+class PsqlUserStore (
   db: Database
 ) extends UserStore[Task] {
 

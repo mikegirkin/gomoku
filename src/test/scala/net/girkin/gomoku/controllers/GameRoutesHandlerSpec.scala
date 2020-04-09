@@ -1,4 +1,4 @@
-package controllers
+package net.girkin.gomoku.controllers
 
 import java.time.{Instant, LocalDateTime}
 import java.util.UUID
@@ -45,7 +45,7 @@ class GameRoutesHandlerSpec extends AnyWordSpec
   "GameRoutesHandler 'JoinRandomGame'" should {
     val url = uri"/join"
 
-    val user1 = User(UUID.randomUUID(), "test1@example.com", LocalDateTime.now)
+    val user1 = User(UUID.randomUUID(), "test1@example.com", Instant.now)
     val authToken = AuthUser.fromUser(user1)
     val nonce = "a87fvoajlhvlbhv"
     val joinRequest = Request[Task](method = Method.POST, uri = url)

@@ -1,6 +1,6 @@
 package net.girkin.gomoku.auth
 
-import java.time.LocalDateTime
+import java.time.{Instant, LocalDateTime}
 import java.util.{Base64, UUID}
 
 import cats.data.EitherT
@@ -127,7 +127,7 @@ class GoogleAuthImpl[Eff[_]: Effect](
       storedUser <- userStore.getByEmail(email)
       resultingUser <- {
         storedUser.fold {
-          val newUser = User(UUID.randomUUID(), email, LocalDateTime.now)
+          val newUser = User(UUID.randomUUID(), email, Instant.now)
           userStore.upsert(newUser).map{ _ => newUser }
         } {
           u => implicitly[Monad[Eff]].pure(u)

@@ -191,8 +191,8 @@ case class Game(
 object Game {
   def create(height: Int, width: Int, winningCondition: Int): Game = new Game(
     UUID.randomUUID(),
-    None,
-    None,
+    Option.empty,
+    Option.empty,
     WaitingForUsers,
     winningCondition,
     GameField(height, width),

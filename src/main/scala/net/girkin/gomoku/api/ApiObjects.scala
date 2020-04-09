@@ -18,40 +18,9 @@ object ApiObjects {
   )
 
   implicit val gameFinishReasonCodec: Codec[GameFinishReason] = deriveConfiguredCodec[GameFinishReason]
+  implicit val gameStatusCodec: Codec[GameStatus] = deriveConfiguredCodec[GameStatus]
+  implicit val moveAttemptCodec: Codec[MoveAttempt] = deriveConfiguredCodec[MoveAttempt]
 
-  implicit val gameStatusEncoder: Encoder[GameStatus] = Encoder.instance[GameStatus] {
-    case WaitingForUsers => Json.obj(
-      "type" -> Json.fromString("WaitingForUsers")
-    )
-    case Active(awaitingMoveFrom) => Json.obj(
-      "type" -> Json.fromString("Active"),
-      "awaitingMoveFrom" -> awaitingMoveFrom.asJson
-    )
-    case Finished(reason) => Json.obj(
-      "type" -> Json.fromString("Finished"),
-      "reason" -> reason.asJson
-    )
-  }
-
-  //implicit val gameStatusDecoder: Codec[GameStatus] = ???
-  //  Decoder.instance[GameStatus] { cursor =>
-//    for {
-//      `type` <- cursor.get[String]("type")
-//      result <- `type` match {
-//        case "WaitingForUsers" => WaitingForUsers
-//        case "Active" => {
-//          cursor.get[Int]("awaitingMoveFrom").map { playerNumber =>
-//            Active(playerNumber)
-//          }
-//        }
-//        case "Finished" => {
-//          cursor.get[GameFinishReason].
-//        }
-//      }
-//    } yield {
-//      result
-//    }
-//  }
 
   implicit val gameFieldEncoder = deriveConfiguredEncoder[GameField]
   implicit val gameEncoder = deriveConfiguredEncoder[Game]

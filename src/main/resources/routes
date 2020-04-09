@@ -15,8 +15,8 @@ GET     /test                       net.girkin.gomoku.HomeController.test
 #Game routes
 GET     /game                       net.girkin.gomoku.GameController.index
 GET     /game/joinRandom            net.girkin.gomoku.GameController.joinRandomGame
-GET     /game/:id/connect           net.girkin.gomoku.GameController.socketConnect(id: java.util.UUID)
+GET     /game/:id/connect           net.girkin.gomoku.GameController.socketConnect(id: java.net.girkin.gomoku.util.UUID)
 
 
 # Map static resources from the /public folder to the /assets URL path
-GET     /assets/*file               controllers.Assets.at(path="/public", file)
+GET     /assets/*file               net.girkin.gomoku.controllers.Assets.at(path="/public", file)

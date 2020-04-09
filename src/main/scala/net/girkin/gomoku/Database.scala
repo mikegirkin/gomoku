@@ -22,8 +22,10 @@ class PsqlPooledDatabase extends Database {
 
   override def withConnection[T](action: Connection => T): T = {
     val connection = dataSource.getConnection
+    connection.setAutoCommit(false)
     try {
       val result = action(connection)
+      connection.commit()
       connection.close()
       result
     } catch {

@@ -6,7 +6,7 @@ import cats.effect._
 import net.girkin.gomoku.api.{GameRoutesHandler, OutboundChannels, GameRoutes, StaticRoutesHandler}
 import net.girkin.gomoku.auth.{AuthPrimitives, GoogleAuthImpl, SecurityConfiguration}
 import net.girkin.gomoku.game.{Game, GameConciergeImpl, PsqlGameStore}
-import net.girkin.gomoku.users.{PsqlAnormUserStore, UserStore}
+import net.girkin.gomoku.users.{PsqlUserStore, UserStore}
 import org.http4s.HttpRoutes
 import org.http4s.client.Client
 import org.http4s.client.blaze.BlazeClientBuilder
@@ -81,7 +81,7 @@ object Starter extends App with Http4sDsl[Task] {
 object Services {
 
   val db = new PsqlPooledDatabase()
-  val userStore: UserStore[Task] = new PsqlAnormUserStore(db)
+  val userStore: UserStore[Task] = new PsqlUserStore(db)
   val securityConfiguration = SecurityConfiguration(
     "270746747187-0ri8ig249up93ranj0l9qvpkhufaocv7.apps.googleusercontent.com",
     "WluSEQw9iNB2iIabeUDOf-no"

@@ -13,7 +13,8 @@ val LogbackVersion = "1.2.3"
 val zioVersion = "1.0.0-RC18-2"
 
 libraryDependencies ++= Seq(
-  "org.playframework.anorm" %% "anorm"      % "2.6.5",
+  "org.playframework.anorm" %% "anorm"          % "2.6.5",
+  "org.playframework.anorm" %% "anorm-postgres" % "2.6.5",
   "org.postgresql"           % "postgresql" % "42.2.4",
   "com.mchange"              % "c3p0"       % "0.9.5.2",
 
@@ -40,8 +41,10 @@ libraryDependencies ++= Seq(
   "org.scalamock"   %% "scalamock"             % "4.4.0" % Test
 )
 
+parallelExecution in Test := false
+
 // Adds additional packages into Twirl
-//TwirlKeys.templateImports += "net.girkin.controllers._"
+//TwirlKeys.templateImports += "net.girkin.net.girkin.gomoku.controllers._"
 
 // Adds additional packages into conf/routes
 // play.sbt.routes.RoutesKeys.routesImport += "net.girkin.binders._"

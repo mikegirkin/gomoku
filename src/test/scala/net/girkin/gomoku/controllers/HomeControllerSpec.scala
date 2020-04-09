@@ -1,4 +1,4 @@
-package controllers
+package net.girkin.gomoku.controllers
 
 import cats.effect.IO
 import org.scalatest.WordSpec

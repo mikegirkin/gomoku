@@ -26,7 +26,7 @@ case class JoinGameError(
 sealed trait LeaveGameError extends Product with Serializable
 object LeaveGameError {
   case object NoSuchGameError extends LeaveGameError
-  final case class StoreError(exception: Exception) extends LeaveGameError
+  final case class StoreError(error: GameStore.StoreError) extends LeaveGameError
 }
 
 trait GameConcierge {
@@ -56,26 +56,26 @@ class GameConciergeImpl(
     }
 
     gameF.mapError(
-      exc => JoinGameError(exc.exception.getMessage)
+      error => JoinGameError(error.toString)
     )
   }
 
   override def leaveGame(user: AuthUser): IO[LeaveGameError, LeaveGameSuccess] = {
     val resultF: IO[LeaveGameError, LeaveGameSuccess] = for {
-      gameOpt <- gameStore.getActiveGameForPlayer(user).mapError(storeError => LeaveGameError.StoreError(storeError.exception))
+      gameOpt <- gameStore.getActiveGameForPlayer(user).mapError(storeError => LeaveGameError.StoreError(storeError))
       result <- gameOpt match {
         case Some(game) => game.status match {
           case WaitingForUsers => {
             val newGameState = game.removePlayer(user.userId)
             gameStore.saveGameRecord(newGameState).bimap[LeaveGameError, LeaveGameSuccess](
-              err => LeaveGameError.StoreError(err.exception),
+              err => LeaveGameError.StoreError(err),
               _ => LeaveGameSuccess(newGameState.gameId)
             )
           }
           case Active(awaitingMoveFrom) => {
             val newGameState = game.removePlayer(user.userId)
             gameStore.saveGameRecord(newGameState).bimap[LeaveGameError, LeaveGameSuccess](
-              err => LeaveGameError.StoreError(err.exception),
+              err => LeaveGameError.StoreError(err),
               _ => LeaveGameSuccess(newGameState.gameId)
             )
           }
