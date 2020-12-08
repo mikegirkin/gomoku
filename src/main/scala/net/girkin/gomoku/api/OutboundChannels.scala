@@ -10,7 +10,7 @@ final case class NoSuchUserChannel(user: AuthUser) extends Exception
 
 class OutboundChannels(
   private val userChannels: RefM[Map[AuthUser, Queue[Task, WebSocketFrame]]]
-) extends FunctionalLogging[Task] {
+) extends FunctionalLogging {
 
   def route(user: AuthUser, message: WebSocketFrame): Task[Unit] = {
     for {

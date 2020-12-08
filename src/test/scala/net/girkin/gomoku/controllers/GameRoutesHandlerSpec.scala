@@ -17,7 +17,7 @@ import org.scalatest.Inside
 import org.scalatest.matchers.must.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import zio.interop.catz._
-import zio.{IO, Ref, Task}
+import zio.{IO, Ref, RefM, Task}
 
 class GameRoutesHandlerSpec extends AnyWordSpec
   with Matchers with Inside with MockFactory {
@@ -29,10 +29,11 @@ class GameRoutesHandlerSpec extends AnyWordSpec
     val channelStore = OutboundChannels.make()
     val authService = new Auth[Task](new AuthPrimitives[Task])
     val mockStore = mock[GameStore]
+    val gameStreamsF = RefM.make[List[GameStream]](List.empty)
     val gameService = new GameRoutes(
       authService,
       new GameRoutesHandler(
-        new GameConciergeImpl(mockStore),
+        new GameConciergeImpl(mockStore, rt.unsafeRun(gameStreamsF)),
         mockStore,
         rt.unsafeRun(channelStore)
       ),
@@ -93,10 +94,11 @@ class GameRoutesHandlerSpec extends AnyWordSpec
     val store = mock[GameStore]
     val authService = new Auth[Task](new AuthPrimitives[Task])
     val channelStore = OutboundChannels.make()
+    val gameStreamsF = RefM.make[List[GameStream]](List.empty)
     val gameService = new GameRoutes(
       authService,
       new GameRoutesHandler(
-        new GameConciergeImpl(store),
+        new GameConciergeImpl(store, rt.unsafeRun(gameStreamsF)),
         store,
         rt.unsafeRun(channelStore)
       )

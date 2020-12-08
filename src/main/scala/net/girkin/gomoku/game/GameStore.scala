@@ -7,6 +7,7 @@ import java.util.UUID
 import anorm.Macro.ColumnNaming
 import cats.implicits._
 import anorm.postgresql._
+import cats.data.OptionT
 import io.circe.Json
 import io.circe.parser.parse
 import io.circe.syntax._
@@ -14,6 +15,7 @@ import net.girkin.gomoku.api.ApiObjects._
 import net.girkin.gomoku.{AuthUser, Database}
 import org.postgresql.util.PGobject
 import zio.IO
+import zio.interop.catz._
 
 case class GameStoreRecord(
   id: UUID,
@@ -118,24 +120,27 @@ class PsqlGameStore(
     )
   }
 
-  def getGamesAwaitingPlayers(): IO[StoreError, List[Game]] = {
-    val gameList = { cn: Connection =>
-      IO {
-        SQL"select * from games where status -> 'type' = ${WaitingForUsers.getClass.getSimpleName}"
-          .as(gameStoreRecordParser.*)(cn)
+  private def fetchMovesForGame(game: Game): IO[StoreError, Game] = {
+    for {
+      moveRecords <- fetchMoves(game.gameId)
+      moves = moveRecords.map(_.toMoveAttempt())
+      gameWithMoves <- IO.fromEither {
+        replayMoves(game, moves).leftMap[StoreError] { moveError =>
+          StoreError.storeInconsistent(s"Error while loading moves to a game: ${moveError}")
+        }
       }
+    } yield {
+      gameWithMoves
     }
-
-    val moves = { cn: Connection =>
-      IO {
-        SQL"select * from moves where game_id = "
-      }
-    }
-
-    ???
-
   }
 
+  def getGamesAwaitingPlayers(): IO[StoreError, List[Game]] = dbIO { cn: Connection =>
+    println(s"${WaitingForUsers.getClass.getSimpleName}")
+
+    SQL"select * from games where status ->> 'type' = ${WaitingForUsers.productPrefix}"
+      .as(gameStoreRecordParser.*)(cn)
+      .map(_.toGame())
+  }
 
   override def saveMove(game: Game, move: MoveAttempt): IO[StoreError, MoveAttempt] = {
     dbIO { implicit cn =>
@@ -174,24 +179,8 @@ class PsqlGameStore(
         _.toGame()
       )
     }
-    for {
-      gameOpt <- gameRecordF
-      moveRecords <- gameOpt.map { game =>
-          fetchMoves(game.gameId)
-        }.getOrElse(
-          IO.succeed(List[MoveRecord]())
-        )
-      moves = moveRecords.map(_.toMoveAttempt())
-      gameWithMoves <- IO.fromEither {
-        gameOpt.map { game =>
-          replayMoves(game, moves).leftMap[StoreError] { moveError =>
-            StoreError.storeInconsistent(s"Error while loading moves to a game: ${moveError}")
-          }
-        }.sequence
-      }
-    } yield {
-      gameWithMoves
-    }
+
+    OptionT(gameRecordF).semiflatMap(fetchMovesForGame).value
   }
 
   override def saveGameRecord(game: Game): IO[StoreError, Unit] = dbIO { implicit cn =>

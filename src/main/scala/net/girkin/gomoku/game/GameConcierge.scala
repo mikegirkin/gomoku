@@ -2,8 +2,11 @@ package net.girkin.gomoku.game
 
 import java.util.UUID
 
+import cats.effect.Concurrent
+import fs2.concurrent.Queue
 import net.girkin.gomoku.AuthUser
-import zio.IO
+import zio.{IO, RefM, Task}
+import zio.interop.catz._
 
 object Ruleset {
   val height = 5
@@ -35,12 +38,14 @@ trait GameConcierge {
 }
 
 class GameConciergeImpl(
-  gameStore: GameStore
+  private val gameStore: GameStore,
+  private val gameStreams: RefM[List[GameStream]]
 ) extends GameConcierge {
 
   def joinRandomGame(userId: UUID): IO[JoinGameError, JoinGameSuccess] = {
     val gameF = for {
-      games <- gameStore.getGamesAwaitingPlayers()
+      streams <- gameStreams
+      games <- streams.getGamesAwaitingPlayers()
       gameToAddPlayer = games.headOption.getOrElse(
         Game.create(Ruleset.height, Ruleset.width, Ruleset.winningCondition)
       )
@@ -90,5 +95,13 @@ class GameConciergeImpl(
     }
 
     resultF
+  }
+
+  def getGameStream(gameId: UUID): IO[Nothing, Option[GameStream]] = {
+    for {
+      streams <- gameStreams.get
+    } yield {
+      streams.find(_.gameId == gameId)
+    }
   }
 }

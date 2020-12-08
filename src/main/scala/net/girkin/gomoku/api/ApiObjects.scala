@@ -21,6 +21,8 @@ object ApiObjects {
   implicit val gameStatusCodec: Codec[GameStatus] = deriveConfiguredCodec[GameStatus]
   implicit val moveAttemptCodec: Codec[MoveAttempt] = deriveConfiguredCodec[MoveAttempt]
 
+  implicit val gomokuRequestCodec: Codec[GomokuRequest] = deriveConfiguredCodec[GomokuRequest]
+
 
   implicit val gameFieldEncoder = deriveConfiguredEncoder[GameField]
   implicit val gameEncoder = deriveConfiguredEncoder[Game]

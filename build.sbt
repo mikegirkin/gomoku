@@ -1,3 +1,4 @@
+addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.11.0" cross CrossVersion.full)
 enablePlugins(SbtTwirl)
 
 name := """gomoku"""
@@ -7,7 +8,7 @@ version := "1.0-SNAPSHOT"
 
 scalaVersion := "2.13.1"
 
-val http4sVersion = "0.21.2"
+val http4sVersion = "0.21.3"
 val circeVersion = "0.12.2"
 val LogbackVersion = "1.2.3"
 val zioVersion = "1.0.0-RC18-2"
@@ -15,7 +16,7 @@ val zioVersion = "1.0.0-RC18-2"
 libraryDependencies ++= Seq(
   "org.playframework.anorm" %% "anorm"          % "2.6.5",
   "org.playframework.anorm" %% "anorm-postgres" % "2.6.5",
-  "org.postgresql"           % "postgresql" % "42.2.4",
+  "org.postgresql"           % "postgresql" % "42.2.12",
   "com.mchange"              % "c3p0"       % "0.9.5.2",
 
   "org.http4s"      %% "http4s-dsl"            % http4sVersion,

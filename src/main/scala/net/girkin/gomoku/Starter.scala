@@ -3,9 +3,9 @@ package net.girkin.gomoku
 import java.util.concurrent.Executors
 
 import cats.effect._
-import net.girkin.gomoku.api.{GameRoutesHandler, OutboundChannels, GameRoutes, StaticRoutesHandler}
+import net.girkin.gomoku.api.{GameRoutes, GameRoutesHandler, OutboundChannels, StaticRoutesHandler}
 import net.girkin.gomoku.auth.{AuthPrimitives, GoogleAuthImpl, SecurityConfiguration}
-import net.girkin.gomoku.game.{Game, GameConciergeImpl, PsqlGameStore}
+import net.girkin.gomoku.game.{Game, GameConciergeImpl, GameStream, PsqlGameStore}
 import net.girkin.gomoku.users.{PsqlUserStore, UserStore}
 import org.http4s.HttpRoutes
 import org.http4s.client.Client
@@ -87,17 +87,19 @@ object Services {
     "WluSEQw9iNB2iIabeUDOf-no"
   )
   val authPrimitives = new AuthPrimitives[Task]
+  val gameStreamsF = RefM.make[List[GameStream]](List.empty[GameStream])
 
   def gameService(
     authService: Auth[Task]
   ): Task[HttpRoutes[Task]] /*: Task[Kleisli[OptionT[Task, ?], Request[Task], Response[Task]]] */= {
     for {
       userChannels <- OutboundChannels.make()
-      ref <- zio.Ref.make(List.empty[Game])
+      gameStreams <- gameStreamsF
       gameStore = new PsqlGameStore(db)
       gameService = new GameRoutesHandler(
         new GameConciergeImpl(
-          gameStore
+          gameStore,
+          gameStreams
         ),
         gameStore,
         userChannels

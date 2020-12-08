@@ -3,15 +3,14 @@ package net.girkin.gomoku.game
 import java.util.UUID
 
 import fs2.{Pipe, Stream}
-import net.girkin.gomoku.game.GomokuResponse.{BadMoveRequest, StateChanged}
-import zio.{RefM, Task}
+import zio.{IO, RefM, UIO}
 
 sealed trait GomokuRequest {
   def userId: UUID
   def gameId: UUID
 }
 
-case class MakeMove(
+final case class MakeMove(
   id: UUID,
   userId: UUID,
   gameId: UUID,
@@ -19,68 +18,96 @@ case class MakeMove(
   column: Int
 ) extends GomokuRequest
 
-case class Concede(
+final case class Concede(
   userId: UUID,
   gameId: UUID
 ) extends GomokuRequest
 
 sealed trait GomokuResponse
-
 object GomokuResponse {
-  case class StateChanged(gameId: UUID) extends GomokuResponse
-  case class BadMoveRequest(error: MoveError, gameId: UUID, userId: UUID) extends GomokuResponse
+  final case class StateChanged(gameId: UUID) extends GomokuResponse
+
+  def stateChanged(gameId: UUID): GomokuResponse = StateChanged(gameId)
 }
 
-class GameStream(gameRef: RefM[Game]) {
+sealed trait GomokuError
+object GomokuError {
+  final case class BadMoveRequest(error: MoveError, gameId: UUID, userId: UUID) extends GomokuError
+  final case class InternalError(reason: String) extends GomokuError
 
-  def saveMove(move: MakeMove): Task[GomokuResponse] = {
-    //FIXME:
-    ???
+  def badMoveRequest(error: MoveError, gameId: UUID, userId: UUID): GomokuError = BadMoveRequest(error, gameId, userId)
+  def internalError(reason: String): GomokuError = InternalError(reason)
+}
+
+/***
+ * This class represents a stream of requests/responses that goes through a particular game instance
+ * This stream is intended to exist only when the game exist in memory
+ * @param gameStore
+ * @param gameRef
+ */
+class GameStream private (
+  gameStore: GameStore,
+  gameRef: RefM[Game],
+  val gameId: UUID
+) {
+
+  import GomokuError._
+  import GomokuResponse._
+
+  def getGame: UIO[Game] = {
+    gameRef.get
   }
 
-  private def handleMakeMove(attempt: MakeMove): Task[List[GomokuResponse]] = {
-    for {
-      game <- gameRef.get
-      result <- game.makeMove(MoveAttempt(attempt.row, attempt.column, attempt.userId)).fold(
-        error => Task.succeed(List(BadMoveRequest(error, game.gameId, attempt.userId))),
+  private def handleMakeMove(command: MakeMove): IO[GomokuError, GomokuResponse] = {
+
+    def updateGameAndSaveMove(current: Game): IO[GomokuError, Game] = {
+      val move = MoveAttempt(command.row, command.column, command.userId)
+
+      current.makeMove(move).fold(
+        error => IO.fail(badMoveRequest(error, current.gameId, command.userId)),
         newGameState => {
           for {
-            _ <- saveMove(attempt)
-            _ <- gameRef.set(newGameState)
+            _ <- gameStore.saveMove(current, move).mapError(err => internalError(err.toString))
           } yield {
-            List(StateChanged(game.gameId))
+            newGameState
           }
         }
       )
-    } yield {
-      result
+    }
+
+    gameRef.updateAndGet(updateGameAndSaveMove).map { newGameState =>
+      stateChanged(newGameState.gameId)
     }
   }
 
-  private def handleConcede(request: Concede): Task[List[GomokuResponse]] = {
+  private def handleConcede(request: Concede): IO[GomokuError, GomokuResponse] = {
     for {
       game <- gameRef.get
       newState = game.removePlayer(request.userId)
       _ <- gameRef.set(newState)
     } yield {
-      List(StateChanged(game.gameId))
+      StateChanged(game.gameId)
     }
   }
 
-  def processRequest(req: GomokuRequest): Task[List[GomokuResponse]] = {
+  private def processRequest(req: GomokuRequest): IO[GomokuError, GomokuResponse] = {
     req match {
       case m @ MakeMove(_, _, _, _, _) => handleMakeMove(m)
       case m @ Concede(_, _) => handleConcede(m)
     }
   }
 
-  def buildStream(): Pipe[Task, GomokuRequest, GomokuResponse] = {
-    (in: Stream[Task, GomokuRequest]) => {
-      in.evalMap(processRequest).flatMap(Stream.emits)
+  val stream: Pipe[IO[GomokuError, *], GomokuRequest, GomokuResponse] = {
+    (in: Stream[IO[GomokuError, *], GomokuRequest]) => {
+      in.evalMap(processRequest).flatMap(result => Stream.emit(result))
     }
   }
 }
 
-class Concierge() {
-
+object GameStream {
+  def make(gameStore: GameStore, game: Game): UIO[GameStream] = for {
+    gameRef <- RefM.make(game)
+  } yield {
+    new GameStream(gameStore, gameRef, game.gameId)
+  }
 }

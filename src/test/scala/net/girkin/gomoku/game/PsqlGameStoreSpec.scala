@@ -83,6 +83,20 @@ class PsqlGameStoreSpec extends AnyWordSpec with Matchers with Inside {
           game.field.get(3, 3) shouldBe Some(PlayerNumber.First)
       }
     }
+
+    "be able to fetch games awaiting players" in {
+      val game = Game.create(5, 5, 4)
+
+      rt.unsafeRunSync(store.saveGameRecord(game)).toEither
+
+      val result = rt.unsafeRunSync(store.getGamesAwaitingPlayers()).toEither
+
+      inside(result) {
+        case Right(gameList) =>
+          val fetchedGame = gameList.find(g => g.gameId == game.gameId).get
+          fetchedGame.status shouldBe WaitingForUsers
+      }
+    }
   }
 
 }

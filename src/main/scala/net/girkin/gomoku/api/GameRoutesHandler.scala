@@ -7,7 +7,7 @@ import io.circe.syntax._
 import fs2._
 import net.girkin.gomoku.api.ApiObjects._
 import net.girkin.gomoku.game.{GameConcierge, GameStore}
-import net.girkin.gomoku.{AuthUser, Logging}
+import net.girkin.gomoku.{AuthUser, FunctionalLogging}
 import org.http4s._
 import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
@@ -19,11 +19,25 @@ import zio.Task
 import zio.interop.catz._
 import zio._
 
+
+
 class GameRoutesHandler (
   concierge: GameConcierge,
   gameStore: GameStore,
   userChannels: OutboundChannels
-) extends Http4sDsl[Task] with Logging {
+) extends Http4sDsl[Task] with FunctionalLogging {
+
+  private case class OutboundWebsocketMessage(
+    user: AuthUser,
+    frame: WebSocketFrame
+  )
+
+  sealed trait WebSocketFrameHandlingError extends Product with Serializable
+  object WebSocketFrameHandlingError {
+    final case class BadRequest() extends WebSocketFrameHandlingError
+    final case class InternalException(exception: Throwable) extends WebSocketFrameHandlingError
+  }
+
 
   def listChannels(token: AuthUser): Task[Response[Task]] = {
     for {
@@ -63,33 +77,51 @@ class GameRoutesHandler (
     ).flatten
   }
 
+  private def handleTextFrame(token: AuthUser, frame: Text): Task[List[OutboundWebsocketMessage]] = {
+    val msg =  frame.str
+    val result: IO[WebSocketFrameHandlingError, List[OutboundWebsocketMessage]] = for {
+      allUsers <- userChannels.activeUsers()
+      _ <- info(s"Received ${msg} from $token")
+    } yield {
+      allUsers.filterNot(user => user == token).map {
+        user => OutboundWebsocketMessage(
+          user,
+          Text(s"From $token, message: $msg")
+        )
+      }
+    }
+
+    result.mapError {
+      case WebSocketFrameHandlingError.BadRequest() =>
+        List(OutboundWebsocketMessage(token, Text("Bad request")))
+      case WebSocketFrameHandlingError.InternalException(exc) =>
+        List(OutboundWebsocketMessage(token, Text(s"Internal server error ${exc}")))
+    }.merge
+  }
+
   def handleSocketRequest(token: AuthUser): Task[Response[Task]] = {
-    def processFrame(token: AuthUser)(frame: WebSocketFrame): Task[List[(AuthUser, WebSocketFrame)]] = {
+    def processFrame(token: AuthUser)(frame: WebSocketFrame): Task[List[OutboundWebsocketMessage]] = {
       frame match {
-        case Text(msg, _) => for {
-          allUsers <- userChannels.activeUsers()
-        } yield {
-          logger.debug(s"Received ${msg} from $token")
-          logger.debug(s"All user channels: ${allUsers}")
-          allUsers.filterNot(user => user == token).map {
-            user => user -> Text(s"From $token, message: $msg")
-          }
-        }
+        case frame @ Text(_, _) => handleTextFrame(token, frame)
         case Close(_) => for {
           _ <- userChannels.removeOutboundUserChannel(token)
           allUsers <- userChannels.activeUsers()
-        } yield {
-          allUsers.filterNot(user => user == token).map {
-            user => user -> Text(s"User $token left the room")
+          result = allUsers.filterNot(user => user == token).map { user =>
+            OutboundWebsocketMessage(
+              user,
+              Text(s"User $token left the room")
+            )
           }
+        } yield {
+          result
         }
         case _ => Task.succeed(List.empty)
       }
     }
 
-    def executeSendOrder(sendOrder: List[(AuthUser, WebSocketFrame)]): Task[Unit] = {
-      logger.debug(s"Executing send order ${sendOrder}")
-      sendOrder.map((userChannels.route _).tupled)
+    def executeSendOrder(sendOrder: List[OutboundWebsocketMessage]): Task[Unit] = {
+      debug(s"Executing send order ${sendOrder}")
+      sendOrder.map(m => userChannels.route(m.user, m.frame))
         .sequence
         .map { _ => () }
     }
