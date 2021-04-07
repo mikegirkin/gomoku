@@ -30,10 +30,11 @@ class GameRoutesHandlerSpec extends AnyWordSpec
     val authService = new Auth[Task](new AuthPrimitives[Task])
     val mockStore = mock[GameStore]
     val gameStreamsF = RefM.make[List[GameStream]](List.empty)
+    val playerQueueF = RefM.make(List.empty[UUID])
     val gameService = new GameRoutes(
       authService,
       new GameRoutesHandler(
-        new GameConciergeImpl(mockStore, rt.unsafeRun(gameStreamsF)),
+        new GameConciergeImpl(mockStore, rt.unsafeRun(gameStreamsF), rt.unsafeRun(playerQueueF)),
         mockStore,
         rt.unsafeRun(channelStore)
       ),
@@ -95,10 +96,11 @@ class GameRoutesHandlerSpec extends AnyWordSpec
     val authService = new Auth[Task](new AuthPrimitives[Task])
     val channelStore = OutboundChannels.make()
     val gameStreamsF = RefM.make[List[GameStream]](List.empty)
+    val playerQueueF = RefM.make(List.empty[UUID])
     val gameService = new GameRoutes(
       authService,
       new GameRoutesHandler(
-        new GameConciergeImpl(store, rt.unsafeRun(gameStreamsF)),
+        new GameConciergeImpl(store, rt.unsafeRun(gameStreamsF), rt.unsafeRun(playerQueueF)),
         store,
         rt.unsafeRun(channelStore)
       )

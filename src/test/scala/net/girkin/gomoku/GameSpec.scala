@@ -17,7 +17,7 @@ class GameSpec extends AnyWordSpec
   val secondUser = UUID.randomUUID()
 
   "Game" should {
-    val game = Game.create(7, 5, 5)
+    val game = Game.create(GameRules(7, 5, 5))
 
     "be initialized properly after creation" in {
       game.players shouldBe empty
@@ -77,7 +77,7 @@ class GameSpec extends AnyWordSpec
   }
 
   "Game winner logic" should {
-    val gameWithUsers = Game.create(5, 5, 3)
+    val gameWithUsers = Game.create(GameRules(5, 5, 3))
       .addPlayer(firstUser)
       .addPlayer(secondUser)
 
@@ -116,7 +116,7 @@ class GameSpec extends AnyWordSpec
     }
 
     "be able to figure out draw situation" in {
-      val gameWithUsers = Game.create(3, 3, 3)
+      val gameWithUsers = Game.create(GameRules(3, 3, 3))
         .addPlayer(firstUser)
         .addPlayer(secondUser)
 

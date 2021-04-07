@@ -24,7 +24,7 @@ class PsqlGameStoreSpec extends AnyWordSpec with Matchers with Inside {
   "PsqlGameStore" should {
 
     "be able to insert new empty game and fetch it back" in {
-      val game = Game.create(5, 5, 4)
+      val game = Game.create(GameRules(5, 5, 4))
 
       val insertResult = rt.unsafeRunSync(store.saveGameRecord(game)).toEither
 
@@ -41,7 +41,7 @@ class PsqlGameStoreSpec extends AnyWordSpec with Matchers with Inside {
     }
 
     "be able to store moves for the game and fetch active game back" in {
-      val game = Game.create(5, 5, 4)
+      val game = Game.create(GameRules(5, 5, 4))
 
       val user1 = User(UUID.randomUUID(), "1@test.com", Instant.now())
       rt.unsafeRunSync(userStore.upsert(user1))
@@ -85,7 +85,7 @@ class PsqlGameStoreSpec extends AnyWordSpec with Matchers with Inside {
     }
 
     "be able to fetch games awaiting players" in {
-      val game = Game.create(5, 5, 4)
+      val game = Game.create(GameRules(5, 5, 4))
 
       rt.unsafeRunSync(store.saveGameRecord(game)).toEither
 

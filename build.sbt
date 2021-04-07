@@ -1,4 +1,4 @@
-addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.11.0" cross CrossVersion.full)
+addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.11.3" cross CrossVersion.full)
 enablePlugins(SbtTwirl)
 
 name := """gomoku"""
@@ -6,7 +6,8 @@ organization := "net.girkin"
 
 version := "1.0-SNAPSHOT"
 
-scalaVersion := "2.13.1"
+scalaVersion := "2.13.4"
+scalacOptions ++= Seq("-deprecation", "-feature")
 
 val http4sVersion = "0.21.3"
 val circeVersion = "0.12.2"

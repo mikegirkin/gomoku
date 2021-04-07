@@ -1,8 +1,8 @@
 package net.girkin.gomoku.game
 
 import java.util.UUID
-
 import fs2.{Pipe, Stream}
+import net.girkin.gomoku.Constants
 import zio.{IO, RefM, UIO}
 
 sealed trait GomokuRequest {
@@ -32,11 +32,15 @@ object GomokuResponse {
 
 sealed trait GomokuError
 object GomokuError {
+  final case class GameIsFull(gameId: UUID) extends GomokuError
+  final case class PlayerPresent(gameId: UUID, userId: UUID) extends GomokuError
   final case class BadMoveRequest(error: MoveError, gameId: UUID, userId: UUID) extends GomokuError
   final case class InternalError(reason: String) extends GomokuError
 
   def badMoveRequest(error: MoveError, gameId: UUID, userId: UUID): GomokuError = BadMoveRequest(error, gameId, userId)
   def internalError(reason: String): GomokuError = InternalError(reason)
+  def gameIsFull(gameId: UUID): GomokuError = GameIsFull(gameId)
+  def playerPresent(gameId: UUID, userId: UUID): GomokuError = PlayerPresent(gameId, userId)
 }
 
 /***
@@ -56,6 +60,17 @@ class GameStream private (
 
   def getGame: UIO[Game] = {
     gameRef.get
+  }
+
+  def addPlayer(playerId: UUID): IO[GomokuError, Game] = {
+    gameRef.updateAndGet { game =>
+      if(game.hasBothPlayers) IO.fail(GomokuError.gameIsFull(game.gameId))
+      else if(game.getPlayerNumber(playerId).isDefined) IO.fail(GomokuError.playerPresent(game.gameId, playerId))
+      else {
+        val updatedGame = game.addPlayer(playerId)
+        IO.succeed(updatedGame)
+      }
+    }
   }
 
   private def handleMakeMove(command: MakeMove): IO[GomokuError, GomokuResponse] = {
@@ -109,5 +124,9 @@ object GameStream {
     gameRef <- RefM.make(game)
   } yield {
     new GameStream(gameStore, gameRef, game.gameId)
+  }
+
+  def makeWithEmptyGame(gameStore: GameStore, rules: GameRules): UIO[GameStream] = {
+    make(gameStore, Game.create(rules))
   }
 }

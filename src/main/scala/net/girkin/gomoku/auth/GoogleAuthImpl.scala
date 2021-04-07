@@ -41,7 +41,7 @@ class GoogleAuthImpl[Eff[_]: Effect](
 
   val REDIRECT_AFTER_LOGIN_TO = s"http://${Constants.host}:${Constants.port}/auth/google/callback"
 
-  val service = HttpService[Eff] {
+  val service = HttpRoutes.of[Eff] {
     case GET -> Root / "begin" => startAuthProcess(REDIRECT_AFTER_LOGIN_TO)
     case request @ GET -> Root / "callback" => processCallback(request)
   }
@@ -75,7 +75,7 @@ class GoogleAuthImpl[Eff[_]: Effect](
     case class GoogleUserResponse(tokenType: String, idToken: String)
 
     implicit val snakeCaseConfig: Configuration = Configuration.default.withSnakeCaseMemberNames
-    implicit val decoder: Decoder[GoogleUserResponse] = deriveDecoder[GoogleUserResponse]
+    implicit val decoder: Decoder[GoogleUserResponse] = deriveConfiguredDecoder[GoogleUserResponse]
 
     val requestBody = Seq(
       "code" -> code,

@@ -46,6 +46,8 @@ case object GameNotStarted extends MoveError
 case class ImpossibleMove(reason: String) extends MoveError
 case object GameFinished extends MoveError
 
+case class GameRules(height: Int, width: Int, winCondition: Int)
+
 case class MoveAttempt(
   row: Int,
   column: Int,
@@ -82,6 +84,8 @@ case class Game(
   createdAt: Instant
 ) {
   def players: List[UUID] = List(player1, player2).flatten
+
+  def hasBothPlayers: Boolean = player1.isDefined && player2.isDefined
 
   def addPlayer(user: UUID): Game = {
     if(player1.isEmpty) this.copy(player1 = Some(user))
@@ -158,8 +162,10 @@ case class Game(
       }.map {
         case (r, c) => field.get(r, c)
       }.reduce[Option[PlayerNumber]] {
-        case (a, b) if a.isEmpty || b.isEmpty || a != b => None
-        case (a, b) if a == b => a
+        case (a, b) => {
+          if(a.isEmpty || b.isEmpty || a != b) None
+          else a
+        }
       }.isDefined
     }
   }
@@ -189,13 +195,13 @@ case class Game(
 }
 
 object Game {
-  def create(height: Int, width: Int, winningCondition: Int): Game = new Game(
+  def create(rules: GameRules): Game = new Game(
     UUID.randomUUID(),
     Option.empty,
     Option.empty,
     WaitingForUsers,
-    winningCondition,
-    GameField(height, width),
+    rules.winCondition,
+    GameField(rules.height, rules.width),
     Instant.now()
   )
 }

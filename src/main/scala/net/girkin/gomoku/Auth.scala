@@ -1,12 +1,10 @@
 package net.girkin.gomoku
 
-import java.util.{Base64, UUID}
-
 import cats.Applicative
 import cats.data.{Kleisli, OptionT}
 import cats.effect.Effect
 import cats.implicits._
-import io.circe.ObjectEncoder
+import io.circe.Encoder
 import io.circe.generic.semiauto._
 import io.circe.syntax._
 import net.girkin.gomoku.auth.AuthPrimitives
@@ -17,7 +15,9 @@ import org.http4s.headers.Location
 import org.http4s.server.AuthMiddleware
 import org.http4s.twirl._
 import org.http4s.util.CaseInsensitiveString
-import org.http4s.{AuthedService, HttpRoutes, Request, Response, Uri, headers}
+import org.http4s._
+
+import java.util.{Base64, UUID}
 
 sealed trait AuthToken
 case class AuthUser(userId: UUID) extends AuthToken
@@ -35,7 +35,7 @@ class Auth[F[_]: Effect](
   authPrimitives: AuthPrimitives[F]
 ) extends Http4sDsl[F] with Logging {
 
-  implicit val authErrEncoder: ObjectEncoder[AuthErr] = deriveEncoder[AuthErr]
+  implicit val authErrEncoder: Encoder.AsObject[AuthErr] = deriveEncoder[AuthErr]
 
   val service = HttpRoutes.of[F] {
     case GET -> Root / "login" => login()
@@ -75,14 +75,14 @@ class Auth[F[_]: Effect](
     case x => x
   }
 
-  val onFailure: AuthedService[AuthErr, F] = Kleisli {
+  val onFailure: AuthedRoutes[AuthErr, F] = Kleisli {
     req =>
       OptionT.liftF(
         if(req.req.headers
           .get(CaseInsensitiveString("X-Requested-With"))
           .exists { _.value == "XMLHttpRequest" }
         ) {
-          Forbidden(req.authInfo.asJson).map(authPrimitives.removeAuthCookie)
+          Forbidden(req.context.asJson).map(authPrimitives.removeAuthCookie)
         } else {
           SeeOther(
             Location(Uri.fromString(Constants.LoginUrl).toOption.get),

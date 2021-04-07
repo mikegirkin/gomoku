@@ -34,8 +34,8 @@ class GameRoutesHandler (
 
   sealed trait WebSocketFrameHandlingError extends Product with Serializable
   object WebSocketFrameHandlingError {
-    final case class BadRequest() extends WebSocketFrameHandlingError
-    final case class InternalException(exception: Throwable) extends WebSocketFrameHandlingError
+    case class BadRequest() extends WebSocketFrameHandlingError
+    case class InternalException(exception: Throwable) extends WebSocketFrameHandlingError
   }
 
 

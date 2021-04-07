@@ -1,7 +1,6 @@
 package net.girkin.gomoku
 
 import java.util.concurrent.Executors
-
 import cats.effect._
 import net.girkin.gomoku.api.{GameRoutes, GameRoutesHandler, OutboundChannels, StaticRoutesHandler}
 import net.girkin.gomoku.auth.{AuthPrimitives, GoogleAuthImpl, SecurityConfiguration}
@@ -20,6 +19,7 @@ import zio.interop.catz._
 import zio.interop.catz.implicits._
 import zio.{Task, ZIO, _}
 
+import java.util.UUID
 import scala.concurrent.ExecutionContext
 
 object Starter extends App with Http4sDsl[Task] {
@@ -95,11 +95,13 @@ object Services {
     for {
       userChannels <- OutboundChannels.make()
       gameStreams <- gameStreamsF
+      playerQueue <- RefM.make(List.empty[UUID])
       gameStore = new PsqlGameStore(db)
       gameService = new GameRoutesHandler(
         new GameConciergeImpl(
           gameStore,
-          gameStreams
+          gameStreams,
+          playerQueue
         ),
         gameStore,
         userChannels
