@@ -26,7 +26,7 @@ object PlayerNumber {
     value match {
       case 0 => Success(PlayerNumber.First)
       case 1 => Success(PlayerNumber.Second)
-      case _ => Failure(new IllegalArgumentException(s"PlayerNumber could only be created from 0 or 1. Provided: ${value}"))
+      case _ => Failure(new IllegalArgumentException(s"PlayerNumber could only be created from 0 or 1. Provided: $value"))
     }
   }
 }
@@ -96,7 +96,11 @@ final case class Game(
         case Finished(_) => Some(GameFinished)
         case Active(userNumber) if players(userNumber.asInt) != move.userId =>
           Some(ImpossibleMove("Wrong user"))
-        case _ => None
+        case _ =>
+          if(field.get(move.row, move.column).isDefined)
+            Some(ImpossibleMove("Cell is taken"))
+          else
+            None
       }
     }
   }
@@ -143,10 +147,9 @@ final case class Game(
       }.map {
         case (r, c) => field.get(r, c)
       }.reduce[Option[PlayerNumber]] {
-        case (a, b) => {
+        case (a, b) =>
           if(a.isEmpty || b.isEmpty || a != b) None
           else a
-        }
       }.isDefined
     }
   }

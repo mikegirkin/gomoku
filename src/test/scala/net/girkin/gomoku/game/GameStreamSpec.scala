@@ -1,7 +1,5 @@
 package net.girkin.gomoku.game
 
-import cats.arrow.FunctionK
-import cats.data.EitherT
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -10,14 +8,16 @@ import fs2._
 import zio.interop.catz._
 import zio.interop.catz.implicits._
 import cats.effect._
-import cats.~>
-import org.http4s.Response
+import net.girkin.gomoku.game.GomokuError.BadMoveRequest
+import net.girkin.gomoku.game.GomokuResponse.StateChanged
 
 import java.util.UUID
 
 class GameStreamSpec extends AnyWordSpec with Matchers with MockFactory {
 
   //implicit val compiler: fs2.Stream.Compiler[IO[GomokuError, *], Task] = ???
+  implicit val ec = scala.concurrent.ExecutionContext.global
+  implicit val rt = zio.Runtime.default
 
   "it" should {
     "work" in {
@@ -30,23 +30,28 @@ class GameStreamSpec extends AnyWordSpec with Matchers with MockFactory {
         GomokuRequest.makeMove(UUID.randomUUID(), player1, game.gameId, 0, 0),
         GomokuRequest.makeMove(UUID.randomUUID(), player2, game.gameId, 0, 0)
       )
-      val inputStream: fs2.Stream[UIO, GomokuRequest] = fs2.Stream(requests:_*).covary[UIO]
+      val inputStream: fs2.Stream[UIO, GomokuRequest] = fs2.Stream(requests: _*).covary[UIO]
 
-      val UIOtoTask: ~>[UIO, Task] = new FunctionK[UIO, Task] {
-        override def apply[A](fa: UIO[A]): Task[A] = fa//.flatMap(Task.succeed(_))
-      }
+      (gameStore.saveMove _)
+        .expects(game, MoveAttempt(0 ,0, player1))
+        .returning(IO.succeed(MoveAttempt(0 ,0, player1)))
 
-
-      for {
+      val test = for {
         gameStream <- GameStream.make(gameStore, game)
-      } yield {
-        val result = inputStream
+        result <- inputStream
           .through(gameStream.pipe)
           .compile[Task, Task, Either[GomokuError, GomokuResponse]]
           .toVector
+      } yield {
+        val expected = List(
+          Right(StateChanged(game.gameId)),
+          Left(GomokuError.badMoveRequest(ImpossibleMove("Cell is taken"), game.gameId, player2))
+        )
 
+        result should contain theSameElementsAs expected
       }
 
+      rt.unsafeRun(test)
     }
   }
 
