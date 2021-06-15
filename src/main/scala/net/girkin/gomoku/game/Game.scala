@@ -1,6 +1,6 @@
 package net.girkin.gomoku.game
 
-import java.time.{Instant, ZonedDateTime}
+import java.time.Instant
 import java.util.UUID
 
 import cats.implicits._
@@ -37,12 +37,10 @@ case object Draw extends GameFinishReason
 final case class PlayerWon(playerNumber: PlayerNumber) extends GameFinishReason
 
 sealed trait GameStatus
-case object WaitingForUsers extends GameStatus
 case class Active(awaitingMoveFrom: PlayerNumber) extends GameStatus
 case class Finished(reason: GameFinishReason) extends GameStatus
 
 trait MoveError
-case object GameNotStarted extends MoveError
 case class ImpossibleMove(reason: String) extends MoveError
 case object GameFinished extends MoveError
 
@@ -74,36 +72,16 @@ object GameField {
   ): GameField = new GameField(height, width, Vector.fill(height)(Vector.fill(width)(None)))
 }
 
-case class Game(
+final case class Game(
   gameId: UUID,
-  player1: Option[UUID],
-  player2: Option[UUID],
+  player1: UUID,
+  player2: UUID,
   status: GameStatus,
-  winningCondition: Int,
+  winCondition: Int,
   field: GameField,
   createdAt: Instant
 ) {
-  def players: List[UUID] = List(player1, player2).flatten
-
-  def hasBothPlayers: Boolean = player1.isDefined && player2.isDefined
-
-  def addPlayer(user: UUID): Game = {
-    if(player1.isEmpty) this.copy(player1 = Some(user))
-    else if (player2.isEmpty) this.copy(player2 = Some(user), status = Active(PlayerNumber.First))
-    else this
-  }
-
-  def removePlayer(userId: UUID): Game = {
-    if (this.status.isInstanceOf[Finished]) {
-      this
-    } else {
-      getPlayerNumber(userId).fold(
-        this
-      ) { playerNumber =>
-        this.copy(status = Finished(PlayerQuit(playerNumber)))
-      }
-    }
-  }
+  def players: List[UUID] = List(player1, player2)
 
   def isMoveWrong(move: MoveAttempt): Option[MoveError] = {
     if (
@@ -115,7 +93,6 @@ case class Game(
       Some(ImpossibleMove("Out of bounds"))
     } else {
       this.status match {
-        case WaitingForUsers => Some(GameNotStarted)
         case Finished(_) => Some(GameFinished)
         case Active(userNumber) if players(userNumber.asInt) != move.userId =>
           Some(ImpossibleMove("Wrong user"))
@@ -125,8 +102,8 @@ case class Game(
   }
 
   def getPlayerNumber(userId: UUID): Option[PlayerNumber] = {
-    if(player1.contains(userId)) Some(PlayerNumber.First)
-    else if(player2.contains(userId)) Some(PlayerNumber.Second)
+    if(player1 == userId) Some(PlayerNumber.First)
+    else if(player2 == userId) Some(PlayerNumber.Second)
     else Option.empty
   }
 
@@ -138,7 +115,7 @@ case class Game(
       gameWithUpdatedField = this.copy(field = newFieldState)
       newStatus: GameStatus = gameWithUpdatedField.winner() match {
         case Some(winner) => Finished(PlayerWon(winner))
-        case None => if(gameWithUpdatedField.isDraw()) {
+        case None => if(gameWithUpdatedField.isDraw) {
           Finished(Draw)
         } else {
           Active(currentUserNumber.other)
@@ -149,6 +126,10 @@ case class Game(
         status = newStatus
       )
     }
+  }
+
+  def playerConceded(playerNumber: PlayerNumber): Game = {
+    this.copy(status = Finished(PlayerQuit(playerNumber)))
   }
 
   private def hasCompleteLineStartingAt(row: Int, col: Int, length: Int, delta: (Int, Int)): Boolean = {
@@ -176,16 +157,16 @@ case class Game(
     val diagonal = (1, 1)
 
     val winner = for {
-      row <- Range(0, field.height - winningCondition)
-      col <- Range(0, field.width - winningCondition)
+      row <- Range(0, field.height - winCondition)
+      col <- Range(0, field.width - winCondition)
       delta <- List(horizontal, vertical, diagonal)
-      winner <- field.get(row, col) if hasCompleteLineStartingAt(row, col, winningCondition, delta)
+      winner <- field.get(row, col) if hasCompleteLineStartingAt(row, col, winCondition, delta)
     } yield winner
 
     winner.headOption
   }
 
-  private def isDraw(): Boolean = {
+  private def isDraw: Boolean = {
     (for {
       r <- Range(0, field.height)
       c <- Range(0, field.width) if field.get(r, c).isEmpty
@@ -195,11 +176,11 @@ case class Game(
 }
 
 object Game {
-  def create(rules: GameRules): Game = new Game(
+  def create(rules: GameRules, player1Id: UUID, player2Id: UUID): Game = new Game(
     UUID.randomUUID(),
-    Option.empty,
-    Option.empty,
-    WaitingForUsers,
+    player1Id,
+    player2Id,
+    Active(PlayerNumber.First),
     rules.winCondition,
     GameField(rules.height, rules.width),
     Instant.now()

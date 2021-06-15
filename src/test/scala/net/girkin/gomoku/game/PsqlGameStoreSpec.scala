@@ -23,33 +23,15 @@ class PsqlGameStoreSpec extends AnyWordSpec with Matchers with Inside {
 
   "PsqlGameStore" should {
 
-    "be able to insert new empty game and fetch it back" in {
-      val game = Game.create(GameRules(5, 5, 4))
-
-      val insertResult = rt.unsafeRunSync(store.saveGameRecord(game)).toEither
-
-      insertResult shouldBe Right(())
-
-      val result = rt.unsafeRunSync(store.getGame(game.gameId)).toEither
-
-      inside(result) {
-        case Right(Some(Game(game.gameId, None, None, WaitingForUsers, game.winningCondition, field, createdAt))) =>
-          field.height shouldBe game.field.height
-          field.width shouldBe game.field.width
-          createdAt should be <= Instant.now()
-      }
-    }
-
     "be able to store moves for the game and fetch active game back" in {
-      val game = Game.create(GameRules(5, 5, 4))
 
       val user1 = User(UUID.randomUUID(), "1@test.com", Instant.now())
       rt.unsafeRunSync(userStore.upsert(user1))
       val user2 = User(UUID.randomUUID(), "2@test.com", Instant.now())
       rt.unsafeRunSync(userStore.upsert(user2))
-      val gameWithPlayers = game.addPlayer(user1.id).addPlayer(user2.id)
+      val game = Game.create(GameRules(5, 5, 4), user1.id, user2.id)
 
-      rt.unsafeRunSync(store.saveGameRecord(gameWithPlayers))
+      rt.unsafeRunSync(store.saveGameRecord(game))
 
       val moves = Vector(
         MoveAttempt(1, 1, user1.id),
@@ -59,7 +41,7 @@ class PsqlGameStoreSpec extends AnyWordSpec with Matchers with Inside {
 
       val movesPlayed = rt.unsafeRunSync {
         for {
-          gameAfter0 <- IO.fromEither(gameWithPlayers.makeMove(moves(0)))
+          gameAfter0 <- IO.fromEither(game.makeMove(moves(0)))
           _ <- store.saveMove(gameAfter0, moves(0))
           gameAfter1 <- IO.fromEither(gameAfter0.makeMove(moves(1)))
           _ <- store.saveMove(gameAfter1, moves(1))
@@ -81,20 +63,6 @@ class PsqlGameStoreSpec extends AnyWordSpec with Matchers with Inside {
           game.field.get(1, 1) shouldBe Some(PlayerNumber.First)
           game.field.get(2, 2) shouldBe Some(PlayerNumber.Second)
           game.field.get(3, 3) shouldBe Some(PlayerNumber.First)
-      }
-    }
-
-    "be able to fetch games awaiting players" in {
-      val game = Game.create(GameRules(5, 5, 4))
-
-      rt.unsafeRunSync(store.saveGameRecord(game)).toEither
-
-      val result = rt.unsafeRunSync(store.getGamesAwaitingPlayers()).toEither
-
-      inside(result) {
-        case Right(gameList) =>
-          val fetchedGame = gameList.find(g => g.gameId == game.gameId).get
-          fetchedGame.status shouldBe WaitingForUsers
       }
     }
   }

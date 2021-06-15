@@ -20,8 +20,8 @@ import zio.interop.catz._
 case class GameStoreRecord(
   id: UUID,
   createdAt: Instant,
-  user1: Option[UUID],
-  user2: Option[UUID],
+  user1: UUID,
+  user2: UUID,
   winningCondition: Int,
   fieldHeight: Int,
   fieldWidth: Int,
@@ -59,7 +59,6 @@ object GameStore {
 trait GameStore {
   import GameStore._
 
-  def getGamesAwaitingPlayers(): IO[StoreError, List[Game]]
   def getActiveGameForPlayer(user: AuthUser): IO[StoreError, Option[Game]]
   def saveGameRecord(game: Game): IO[StoreError, Unit]
   def getGame(id: UUID): IO[StoreError, Option[Game]]
@@ -134,14 +133,6 @@ class PsqlGameStore(
     }
   }
 
-  def getGamesAwaitingPlayers(): IO[StoreError, List[Game]] = dbIO { cn: Connection =>
-    println(s"${WaitingForUsers.getClass.getSimpleName}")
-
-    SQL"select * from games where status ->> 'type' = ${WaitingForUsers.productPrefix}"
-      .as(gameStoreRecordParser.*)(cn)
-      .map(_.toGame())
-  }
-
   override def saveMove(game: Game, move: MoveAttempt): IO[StoreError, MoveAttempt] = {
     dbIO { implicit cn =>
       val moveRecord = MoveRecord(UUID.randomUUID(), Instant.now(), game.gameId, move.userId, move.row, move.column)
@@ -169,7 +160,7 @@ class PsqlGameStore(
       SQL"""
         select id, created_at, user1, user2, winning_condition, field_height, field_width, status
         from games
-        where status ->> 'type' in (${WaitingForUsers.getClass.getSimpleName}, ${classOf[Active].getSimpleName})
+        where status ->> 'type' = (${classOf[Active].getSimpleName})
           and (user1 = ${user.userId} or user2 = ${user.userId})
         order by created_at desc
         limit 1
@@ -187,7 +178,7 @@ class PsqlGameStore(
     val status = game.status.asJson.toString
     SQL"""
       insert into games (id, created_at, user1, user2, winning_condition, field_height, field_width, status)
-      values (${game.gameId}::uuid, ${game.createdAt}, ${game.player1}::uuid, ${game.player2}::uuid, ${game.winningCondition}, ${game.field.height}, ${game.field.width}, ${status}::json)
+      values (${game.gameId}::uuid, ${game.createdAt}, ${game.player1}::uuid, ${game.player2}::uuid, ${game.winCondition}, ${game.field.height}, ${game.field.width}, ${status}::json)
       on conflict(id) do update set
         user1 = excluded.user1,
         user2 = excluded.user2,

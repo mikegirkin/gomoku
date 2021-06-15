@@ -26,6 +26,7 @@ case class LeaveGameSuccess(
 sealed trait LeaveGameError extends Product with Serializable
 object LeaveGameError {
   case object NoSuchGameError extends LeaveGameError
+  final case class UserNotInThisGame(gameId: UUID, playerId: UUID) extends LeaveGameError
   final case class StoreError(error: GameStore.StoreError) extends LeaveGameError
 }
 
@@ -60,9 +61,7 @@ class GameConciergeImpl(
             .map(playerId => ZIO.succeed(playerId))
             .getOrElse(ZIO.fail(JoinedQueue))
       }
-      game = Game.create(defaultRules)
-        .addPlayer(playerIdToPairWith)
-        .addPlayer(userId)
+      game = Game.create(defaultRules, playerIdToPairWith, userId)
       newGameStream <- GameStream.make(gameStore, game)
       _ <- gameStreams.update { gameStreamsList =>
         ZIO.succeed(gameStreamsList.prepended(newGameStream))
@@ -77,19 +76,18 @@ class GameConciergeImpl(
       gameOpt <- gameStore.getActiveGameForPlayer(user).mapError(storeError => LeaveGameError.StoreError(storeError))
       result <- gameOpt match {
         case Some(game) => game.status match {
-          case WaitingForUsers => {
-            val newGameState = game.removePlayer(user.userId)
-            gameStore.saveGameRecord(newGameState).bimap[LeaveGameError, LeaveGameSuccess](
-              err => LeaveGameError.StoreError(err),
-              _ => LeaveGameSuccess(newGameState.gameId)
-            )
-          }
           case Active(awaitingMoveFrom) => {
-            val newGameState = game.removePlayer(user.userId)
-            gameStore.saveGameRecord(newGameState).bimap[LeaveGameError, LeaveGameSuccess](
-              err => LeaveGameError.StoreError(err),
-              _ => LeaveGameSuccess(newGameState.gameId)
-            )
+            val playerNumberOpt = game.getPlayerNumber(user.userId)
+            playerNumberOpt.map {
+              playerNumber =>
+                val newGameState = game.playerConceded(playerNumber)
+                gameStore.saveGameRecord(newGameState).bimap[LeaveGameError, LeaveGameSuccess](
+                  err => LeaveGameError.StoreError(err),
+                  _ => LeaveGameSuccess(newGameState.gameId)
+                )
+            }.getOrElse {
+              IO.fail[LeaveGameError](LeaveGameError.UserNotInThisGame(game.gameId, user.userId))
+            }
           }
           case Finished(reason) => {
             IO.fail[LeaveGameError](LeaveGameError.NoSuchGameError)

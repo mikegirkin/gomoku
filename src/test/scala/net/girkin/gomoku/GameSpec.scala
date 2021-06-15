@@ -17,31 +17,10 @@ class GameSpec extends AnyWordSpec
   val secondUser = UUID.randomUUID()
 
   "Game" should {
-    val game = Game.create(GameRules(7, 5, 5))
-
-    "be initialized properly after creation" in {
-      game.players shouldBe empty
-      game.field.height shouldBe 7
-      game.field.width shouldBe 5
-      game.status shouldBe WaitingForUsers
-    }
-
-    val gameWithOneUser = game.addPlayer(firstUser)
-
-    "be able to handle addition of the first user" in {
-      gameWithOneUser.status shouldBe WaitingForUsers
-      gameWithOneUser.players shouldBe List(firstUser)
-    }
-
-    val gameWithUsers = gameWithOneUser.addPlayer(secondUser)
-
-    "be able to handle addition of the second user" in {
-      gameWithUsers.status shouldBe Active(PlayerNumber.First)
-      gameWithUsers.players shouldBe List(firstUser, secondUser)
-    }
+    val game = Game.create(GameRules(7, 5, 5), firstUser, secondUser)
 
     val move1 = MoveAttempt(2, 2, firstUser)
-    val result = gameWithUsers.makeMove(move1)
+    val result = game.makeMove(move1)
     val gameAfterMove1 = result.toOption.get
 
     "be able to handle correct moves" in {
@@ -51,9 +30,8 @@ class GameSpec extends AnyWordSpec
 
     "be able to handle incorrect moves" in {
       val testSet = List[(Game, MoveAttempt, MoveError)](
-        (gameWithOneUser, MoveAttempt(2, 5, firstUser), GameNotStarted),
-        (gameWithUsers, MoveAttempt(-1, 2, secondUser), ImpossibleMove("smth")),
-        (gameWithUsers, MoveAttempt(2, 2, secondUser), ImpossibleMove("smth")),
+        (game, MoveAttempt(-1, 2, secondUser), ImpossibleMove("smth")),
+        (game, MoveAttempt(2, 2, secondUser), ImpossibleMove("smth")),
         (gameAfterMove1, MoveAttempt(2, 3, firstUser), ImpossibleMove("smth"))
       )
 
@@ -65,21 +43,19 @@ class GameSpec extends AnyWordSpec
       }
     }
 
-    val userQuitGame = gameAfterMove1.removePlayer(secondUser)
+    val userQuitGame = gameAfterMove1.playerConceded(PlayerNumber.Second)
 
     "sets the correct state when one of the players leave before finish" in {
       userQuitGame.status shouldBe Finished(PlayerQuit(PlayerNumber.Second))
     }
 
     "prevents removing player from inactive game" in {
-      userQuitGame.removePlayer(secondUser) shouldBe userQuitGame
+      userQuitGame.playerConceded(PlayerNumber.Second) shouldBe userQuitGame
     }
   }
 
   "Game winner logic" should {
-    val gameWithUsers = Game.create(GameRules(5, 5, 3))
-      .addPlayer(firstUser)
-      .addPlayer(secondUser)
+    val gameWithUsers = Game.create(GameRules(5, 5, 3), firstUser, secondUser)
 
     val moveTests =
       List(
@@ -116,9 +92,7 @@ class GameSpec extends AnyWordSpec
     }
 
     "be able to figure out draw situation" in {
-      val gameWithUsers = Game.create(GameRules(3, 3, 3))
-        .addPlayer(firstUser)
-        .addPlayer(secondUser)
+      val gameWithUsers = Game.create(GameRules(3, 3, 3), firstUser, secondUser)
 
       /*
       XOX

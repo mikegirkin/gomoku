@@ -47,7 +47,7 @@ object Starter extends App with Http4sDsl[Task] {
         .bindHttp(Constants.port, "0.0.0.0")
         .withHttpApp(Logger.httpApp(true, false)(httpRoutes))
         .serve
-        .compile[Task, Task, ExitCode]
+        .compile[Task, Task, cats.effect.ExitCode]
         .drain
     } yield {
       server
@@ -56,7 +56,7 @@ object Starter extends App with Http4sDsl[Task] {
     app
   }
 
-  override def run(args: List[String]): ZIO[Clock, Nothing, Int] = {
+  override def run(args: List[String]) = {
 
     val environment = ZIO.runtime[Unit]
     val server = environment.flatMap { env =>
@@ -68,11 +68,11 @@ object Starter extends App with Http4sDsl[Task] {
     program.foldM(
       err => {
         println("Error")
-        ZIO.succeed(1)
+        ZIO.succeed(zio.ExitCode.failure)
       },
       _ => {
         println("Success finish")
-        ZIO.succeed(0)
+        ZIO.succeed(zio.ExitCode.success)
       }
     )
   }

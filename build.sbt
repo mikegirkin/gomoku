@@ -1,4 +1,4 @@
-addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.11.3" cross CrossVersion.full)
+addCompilerPlugin("org.typelevel" %% "kind-projector" % "0.13.0" cross CrossVersion.full)
 enablePlugins(SbtTwirl)
 
 name := """gomoku"""
@@ -6,19 +6,19 @@ organization := "net.girkin"
 
 version := "1.0-SNAPSHOT"
 
-scalaVersion := "2.13.4"
+scalaVersion := "2.13.6"
 scalacOptions ++= Seq("-deprecation", "-feature")
 
 val http4sVersion = "0.21.3"
 val circeVersion = "0.12.2"
 val LogbackVersion = "1.2.3"
-val zioVersion = "1.0.0-RC18-2"
+val zioVersion = "1.0.9"
 
 libraryDependencies ++= Seq(
   "org.playframework.anorm" %% "anorm"          % "2.6.5",
   "org.playframework.anorm" %% "anorm-postgres" % "2.6.5",
-  "org.postgresql"           % "postgresql" % "42.2.12",
-  "com.mchange"              % "c3p0"       % "0.9.5.2",
+  "org.postgresql"           % "postgresql"     % "42.2.12",
+  "com.mchange"              % "c3p0"           % "0.9.5.2",
 
   "org.http4s"      %% "http4s-dsl"            % http4sVersion,
   "org.http4s"      %% "http4s-blaze-client"   % http4sVersion,
@@ -27,7 +27,7 @@ libraryDependencies ++= Seq(
   "org.http4s"      %% "http4s-twirl"          % http4sVersion,
 
   "dev.zio"         %% "zio"                   % zioVersion,
-  "dev.zio"         %% "zio-interop-cats"      % "2.0.0.0-RC12",
+  "dev.zio"         %% "zio-interop-cats"      % "2.5.1.0",
 
   "ch.qos.logback"   % "logback-classic"       % LogbackVersion,
 

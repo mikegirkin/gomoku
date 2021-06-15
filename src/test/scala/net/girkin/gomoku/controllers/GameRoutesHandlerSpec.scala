@@ -64,30 +64,6 @@ class GameRoutesHandlerSpec extends AnyWordSpec
 
       result.status mustBe Status.Forbidden
     }
-
-    "be able to join game when authenticated" in new Environment {
-      (mockStore.getGamesAwaitingPlayers _).expects()
-        .returning(IO.succeed(List()))
-      (mockStore.saveGameRecord _).expects(where {
-        (game: Game) => game.player1.contains(user1.id) &&
-        game.status == WaitingForUsers
-      }).returning(IO.succeed(()))
-
-      val result = rt.unsafeRun(service.run(authenticatedRequest))
-
-      result.status mustBe Status.Ok
-    }
-
-    "be able to prevent player from signing up for the game if they are waiting for one" in new Environment {
-      (mockStore.getGamesAwaitingPlayers _).expects()
-        .returning(IO.succeed(List(
-          Game(UUID.randomUUID(), Some(user1.id), None, WaitingForUsers, 5, GameField(5, 5), Instant.now())
-        )))
-
-      val result = rt.unsafeRun(service.run(authenticatedRequest))
-
-      result.status mustBe Status.Ok
-    }
   }
 
   "GameService 'wsEcho'" should {
