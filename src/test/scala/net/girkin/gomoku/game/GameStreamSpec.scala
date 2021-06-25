@@ -4,23 +4,18 @@ import org.scalamock.scalatest.MockFactory
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import zio.{IO, Task, UIO}
-import fs2._
 import zio.interop.catz._
-import zio.interop.catz.implicits._
-import cats.effect._
-import net.girkin.gomoku.game.GomokuError.BadMoveRequest
 import net.girkin.gomoku.game.GomokuResponse.StateChanged
 
 import java.util.UUID
 
 class GameStreamSpec extends AnyWordSpec with Matchers with MockFactory {
 
-  //implicit val compiler: fs2.Stream.Compiler[IO[GomokuError, *], Task] = ???
   implicit val ec = scala.concurrent.ExecutionContext.global
   implicit val rt = zio.Runtime.default
 
-  "it" should {
-    "work" in {
+  "GameStream" should {
+    "produce correct messages when given a stream of requests" in {
       val gameStore = mock[GameStore]
       val player1 = UUID.randomUUID()
       val player2 = UUID.randomUUID()

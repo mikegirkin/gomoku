@@ -44,22 +44,29 @@ class GameConciergeImpl(
   final val defaultRules = GameRules(3, 3, 3)
 
   override def joinRandomGame(userId: UUID): IO[JoinGameError, JoinedGame] = {
+
+    /***
+     * @param userId
+     * @param waitingPlayers
+     * @return Optional player to pair with and a new state of the waiting player list
+     */
+    def pairPlayerWithWaiting(userId: UUID, waitingPlayers: List[UUID]): (Option[UUID], List[UUID]) = {
+      waitingPlayers.headOption.fold {
+        (Option.empty[UUID], waitingPlayers.prepended(userId))
+      } { waitingPlayerId =>
+        (Option(waitingPlayerId), waitingPlayers.tail)
+      }
+    }
+
+
     for {
       //find another player
       playerIdToPairWith <- playerQueue.modify { waitingPlayerList =>
-        waitingPlayerList.headOption.fold {
-          ZIO.succeed(
-            (Option.empty[UUID], waitingPlayerList.prepended(userId))
-          )
-        } { waitingPlayerId =>
-          ZIO.succeed(
-            (Option(waitingPlayerId), waitingPlayerList.tail)
-          )
+        ZIO.succeed {
+          pairPlayerWithWaiting(userId, waitingPlayerList)
         }
       }.flatMap { playerIdOpt =>
-          playerIdOpt
-            .map(playerId => ZIO.succeed(playerId))
-            .getOrElse(ZIO.fail(JoinedQueue))
+        ZIO.fromOption(playerIdOpt).mapError(_ => JoinedQueue)
       }
       game = Game.create(defaultRules, playerIdToPairWith, userId)
       newGameStream <- GameStream.make(gameStore, game)

@@ -1,12 +1,12 @@
 package net.girkin.gomoku.api
 
 import java.util.UUID
-
 import cats.implicits._
 import io.circe.syntax._
+import io.circe.parser.decode
 import fs2._
 import net.girkin.gomoku.api.ApiObjects._
-import net.girkin.gomoku.game.{GameConcierge, GameStore}
+import net.girkin.gomoku.game.{GameConcierge, GameStore, JoinedGame}
 import net.girkin.gomoku.{AuthUser, FunctionalLogging}
 import org.http4s._
 import org.http4s.circe._
@@ -18,7 +18,15 @@ import org.http4s.websocket.WebSocketFrame.{Close, Text}
 import zio.Task
 import zio.interop.catz._
 import zio._
+import ApiObjects._
+import cats.data.Kleisli
 
+sealed trait IncomingGameMessage
+object IncomingGameMessage {
+  final case object RequestJoinGame extends IncomingGameMessage
+  final case object RequestLeaveGame extends IncomingGameMessage
+  final case class RequestMove(row: Int, col: Int) extends IncomingGameMessage
+}
 
 
 class GameRoutesHandler (
@@ -26,6 +34,7 @@ class GameRoutesHandler (
   gameStore: GameStore,
   userChannels: OutboundChannels
 ) extends Http4sDsl[Task] with FunctionalLogging {
+
 
   private case class OutboundWebsocketMessage(
     user: AuthUser,
@@ -78,18 +87,21 @@ class GameRoutesHandler (
   }
 
   private def handleTextFrame(token: AuthUser, frame: Text): Task[List[OutboundWebsocketMessage]] = {
-    val msg =  frame.str
-    val result: IO[WebSocketFrameHandlingError, List[OutboundWebsocketMessage]] = for {
-      allUsers <- userChannels.activeUsers()
-      _ <- info(s"Received ${msg} from $token")
-    } yield {
-      allUsers.filterNot(user => user == token).map {
-        user => OutboundWebsocketMessage(
-          user,
-          Text(s"From $token, message: $msg")
-        )
-      }
+    val deserializeFrame: Kleisli[IO[WebSocketFrameHandlingError, *], Text, IncomingGameMessage] = Kleisli {
+      frame => ZIO.fromEither(
+        decode[IncomingGameMessage](frame.str)
+      ).mapError(
+        _ => WebSocketFrameHandlingError.BadRequest()
+      )
     }
+
+    val handleIncomingMessage: Kleisli[IO[WebSocketFrameHandlingError, *], IncomingGameMessage, List[OutboundWebsocketMessage]] = Kleisli {
+      case IncomingGameMessage.RequestJoinGame => concierge.joinRandomGame(token.userId)
+      case IncomingGameMessage.RequestLeaveGame => ??? //find active game, request leave
+      case IncomingGameMessage.RequestMove(row, col) => ??? // find active game, pass move request to it
+    }
+
+    val result = (deserializeFrame andThen handleIncomingMessage).run(frame)
 
     result.mapError {
       case WebSocketFrameHandlingError.BadRequest() =>
@@ -139,6 +151,11 @@ class GameRoutesHandler (
       result
     }
   }
+
+  def handleGameSocketRequest(token: AuthUser, gameId: String): Task[Response[Task]] = {
+    ???
+  }
+
 }
 
 
