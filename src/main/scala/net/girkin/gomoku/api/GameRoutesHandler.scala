@@ -6,7 +6,7 @@ import io.circe.syntax._
 import io.circe.parser.decode
 import fs2._
 import net.girkin.gomoku.api.ApiObjects._
-import net.girkin.gomoku.game.{GameConcierge, GameStore, JoinedGame}
+import net.girkin.gomoku.game.{GameConcierge, GameStore}
 import net.girkin.gomoku.{AuthUser, FunctionalLogging}
 import org.http4s._
 import org.http4s.circe._
@@ -28,17 +28,16 @@ object IncomingGameMessage {
   final case class RequestMove(row: Int, col: Int) extends IncomingGameMessage
 }
 
-
-class GameRoutesHandler (
-  concierge: GameConcierge,
-  gameStore: GameStore,
-  userChannels: OutboundChannels
-) extends Http4sDsl[Task] with FunctionalLogging {
-
+class GameRoutesHandler(
+    concierge: GameConcierge,
+    gameStore: GameStore,
+    userChannels: OutboundChannels
+) extends Http4sDsl[Task]
+    with FunctionalLogging {
 
   private case class OutboundWebsocketMessage(
-    user: AuthUser,
-    frame: WebSocketFrame
+      destinationUser: AuthUser,
+      frame: WebSocketFrame
   )
 
   sealed trait WebSocketFrameHandlingError extends Product with Serializable
@@ -46,7 +45,6 @@ class GameRoutesHandler (
     case class BadRequest() extends WebSocketFrameHandlingError
     case class InternalException(exception: Throwable) extends WebSocketFrameHandlingError
   }
-
 
   def listChannels(token: AuthUser): Task[Response[Task]] = {
     for {
@@ -62,7 +60,6 @@ class GameRoutesHandler (
     }
   }
 
-
   def gameApp(userToken: AuthUser): Task[Response[Task]] = {
     Ok(
       views.html.dashboard()
@@ -70,34 +67,56 @@ class GameRoutesHandler (
   }
 
   def game(userToken: AuthUser, gameId: UUID): Task[Response[Task]] = {
-    gameStore.getGame(gameId).foldM(
-      { error => InternalServerError() },
-      gameOpt => gameOpt.fold(
-        NotFound()
-      ) {
-        game => Ok(game.asJson)
-      })
+    gameStore
+      .getGame(gameId)
+      .foldM(
+        { error => InternalServerError() },
+        gameOpt =>
+          gameOpt.fold(
+            NotFound()
+          ) { game =>
+            Ok(game.asJson)
+          }
+      )
   }
 
+  @deprecated
   def joinRandomGame(token: AuthUser): Task[Response[Task]] = {
-    concierge.joinRandomGame(token.userId).fold[Task[Response[Task]]](
-      error => BadRequest(""),
-      ok => Ok(ok.asJson)
-    ).flatten
+    concierge
+      .joinRandomGame(token.userId)
+      .fold[Task[Response[Task]]](
+        error => BadRequest(""),
+        ok => Ok(ok.asJson)
+      )
+      .flatten
   }
 
   private def handleTextFrame(token: AuthUser, frame: Text): Task[List[OutboundWebsocketMessage]] = {
-    val deserializeFrame: Kleisli[IO[WebSocketFrameHandlingError, *], Text, IncomingGameMessage] = Kleisli {
-      frame => ZIO.fromEither(
-        decode[IncomingGameMessage](frame.str)
-      ).mapError(
-        _ => WebSocketFrameHandlingError.BadRequest()
-      )
+    val deserializeFrame: Kleisli[IO[WebSocketFrameHandlingError, *], Text, IncomingGameMessage] = Kleisli { frame =>
+      ZIO
+        .fromEither(
+          decode[IncomingGameMessage](frame.str)
+        )
+        .mapError(_ => WebSocketFrameHandlingError.BadRequest())
     }
 
-    val handleIncomingMessage: Kleisli[IO[WebSocketFrameHandlingError, *], IncomingGameMessage, List[OutboundWebsocketMessage]] = Kleisli {
-      case IncomingGameMessage.RequestJoinGame => concierge.joinRandomGame(token.userId)
-      case IncomingGameMessage.RequestLeaveGame => ??? //find active game, request leave
+    val handleIncomingMessage
+        : Kleisli[IO[WebSocketFrameHandlingError, *], IncomingGameMessage, List[OutboundWebsocketMessage]] = Kleisli {
+      case IncomingGameMessage.RequestJoinGame =>
+        concierge
+          .joinRandomGame(token.userId)
+          .fold(
+            { joinGameError =>
+              val frame = WebSocketFrame.Text(joinGameError.asJson.toString())
+              List(OutboundWebsocketMessage(token, frame))
+            },
+            { joinGameSuccess =>
+              val frame = WebSocketFrame.Text(joinGameSuccess.asJson.toString())
+              List(OutboundWebsocketMessage(token, frame))
+            }
+          )
+
+      case IncomingGameMessage.RequestLeaveGame      => ??? //find active game, request leave
       case IncomingGameMessage.RequestMove(row, col) => ??? // find active game, pass move request to it
     }
 
@@ -107,7 +126,7 @@ class GameRoutesHandler (
       case WebSocketFrameHandlingError.BadRequest() =>
         List(OutboundWebsocketMessage(token, Text("Bad request")))
       case WebSocketFrameHandlingError.InternalException(exc) =>
-        List(OutboundWebsocketMessage(token, Text(s"Internal server error ${exc}")))
+        List(OutboundWebsocketMessage(token, Text(s"Internal server error $exc")))
     }.merge
   }
 
@@ -115,25 +134,27 @@ class GameRoutesHandler (
     def processFrame(token: AuthUser)(frame: WebSocketFrame): Task[List[OutboundWebsocketMessage]] = {
       frame match {
         case frame @ Text(_, _) => handleTextFrame(token, frame)
-        case Close(_) => for {
-          _ <- userChannels.removeOutboundUserChannel(token)
-          allUsers <- userChannels.activeUsers()
-          result = allUsers.filterNot(user => user == token).map { user =>
-            OutboundWebsocketMessage(
-              user,
-              Text(s"User $token left the room")
-            )
+        case Close(_) =>
+          for {
+            _ <- userChannels.removeOutboundUserChannel(token)
+            allUsers <- userChannels.activeUsers()
+            result = allUsers.filterNot(user => user == token).map { user =>
+              OutboundWebsocketMessage(
+                user,
+                Text(s"User $token left the room")
+              )
+            }
+          } yield {
+            result
           }
-        } yield {
-          result
-        }
         case _ => Task.succeed(List.empty)
       }
     }
 
     def executeSendOrder(sendOrder: List[OutboundWebsocketMessage]): Task[Unit] = {
-      debug(s"Executing send order ${sendOrder}")
-      sendOrder.map(m => userChannels.route(m.user, m.frame))
+      debug(s"Executing send order $sendOrder")
+      sendOrder
+        .map(m => userChannels.route(m.destinationUser, m.frame))
         .sequence
         .map { _ => () }
     }
@@ -157,5 +178,3 @@ class GameRoutesHandler (
   }
 
 }
-
-

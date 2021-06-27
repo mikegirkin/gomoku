@@ -24,12 +24,12 @@ object ApiObjects {
   implicit val gomokuRequestCodec: Codec[GomokuRequest] = deriveConfiguredCodec[GomokuRequest]
 
 
-  implicit val gameFieldEncoder = deriveConfiguredEncoder[GameField]
-  implicit val gameEncoder = deriveConfiguredEncoder[Game]
+  implicit val gameFieldEncoder: Encoder[GameField] = deriveConfiguredEncoder[GameField]
+  implicit val gameEncoder: Encoder[Game] = deriveConfiguredEncoder[Game]
 
-  implicit val joinGameSuccessEncoder = deriveConfiguredEncoder[JoinedGame]
-  implicit val joinGameErrorEncoder = deriveConfiguredEncoder[JoinGameError]
+  implicit val joinGameSuccessEncoder: Encoder[JoinGameSuccess] = deriveConfiguredEncoder[JoinGameSuccess]
+  implicit val joinGameErrorEncoder: Encoder[JoinGameError] = deriveConfiguredEncoder[JoinGameError]
 
-  implicit val incomingGameMessageDecoder = deriveConfiguredDecoder[IncomingGameMessage]
+  implicit val incomingGameMessageDecoder: Decoder[IncomingGameMessage] = deriveConfiguredDecoder[IncomingGameMessage]
 
 }
