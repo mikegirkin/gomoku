@@ -9,7 +9,7 @@ version := "1.0-SNAPSHOT"
 scalaVersion := "2.13.6"
 scalacOptions ++= Seq("-deprecation", "-feature")
 
-val http4sVersion = "0.21.3"
+val http4sVersion = "0.21.24"
 val circeVersion = "0.12.2"
 val LogbackVersion = "1.2.3"
 val zioVersion = "1.0.9"
@@ -39,8 +39,9 @@ libraryDependencies ++= Seq(
   "org.reactormonk" %% "cryptobits"            % "1.3",
   "com.pauldijou"   %% "jwt-circe"             % "4.3.0",
 
-  "org.scalatest"   %% "scalatest"             % "3.1.1" % Test,
-  "org.scalamock"   %% "scalamock"             % "4.4.0" % Test
+  "org.scalatest"   %% "scalatest"              % "3.1.1" % Test,
+  "org.scalamock"   %% "scalamock"              % "4.4.0" % Test,
+  "org.http4s"      %% "http4s-jdk-http-client" % "0.3.7" % Test
 )
 
 parallelExecution in Test := false

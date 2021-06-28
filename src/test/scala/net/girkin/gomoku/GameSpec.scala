@@ -86,7 +86,10 @@ class GameSpec extends AnyWordSpec
           game.makeMove(move)
         })
 
-        finishedGame.right.get.status shouldBe Finished(PlayerWon(moves._2))
+        inside(finishedGame) {
+          case Right(value) =>
+            value.status shouldBe Finished(PlayerWon(moves._2))
+        }
       }
 
     }
@@ -119,7 +122,10 @@ class GameSpec extends AnyWordSpec
         game.makeMove(move)
       })
 
-      finishedGame.right.get.status shouldBe Finished(Draw)
+      inside(finishedGame) {
+        case Right(value) =>
+          value.status shouldBe Finished(Draw)
+      }
     }
   }
 }

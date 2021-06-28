@@ -9,6 +9,8 @@ import org.scalatest.WordSpec
  *
  * For more information, see https://www.playframework.com/documentation/latest/ScalaTestingWithScalaTest
  */
+@deprecated
+//TODO: Replace with sensible tests
 class HomeControllerSpec extends WordSpec {
 
   implicit val ec = scala.concurrent.ExecutionContext.global

@@ -29,12 +29,13 @@ class GameRoutesHandlerSpec extends AnyWordSpec
     val channelStore = OutboundChannels.make()
     val authService = new Auth[Task](new AuthPrimitives[Task])
     val mockStore = mock[GameStore]
-    val gameStreamsF = RefM.make[List[GameStream]](List.empty)
-    val playerQueueF = RefM.make(List.empty[UUID])
+    val gameStreams = List.empty
+    val playerQueue = List.empty
+    val concierge = rt.unsafeRun(GameConciergeImpl(mockStore, gameStreams, playerQueue))
     val gameService = new GameRoutes(
       authService,
       new GameRoutesHandler(
-        new GameConciergeImpl(mockStore, rt.unsafeRun(gameStreamsF), rt.unsafeRun(playerQueueF)),
+        concierge,
         mockStore,
         rt.unsafeRun(channelStore)
       ),
@@ -63,37 +64,6 @@ class GameRoutesHandlerSpec extends AnyWordSpec
       val result = rt.unsafeRun(service.run(joinRequest))
 
       result.status mustBe Status.Forbidden
-    }
-  }
-
-  "GameService 'wsEcho'" should {
-    val ref = Ref.make[List[Game]](List.empty)
-    val store = mock[GameStore]
-    val authService = new Auth[Task](new AuthPrimitives[Task])
-    val channelStore = OutboundChannels.make()
-    val gameStreamsF = RefM.make[List[GameStream]](List.empty)
-    val playerQueueF = RefM.make(List.empty[UUID])
-    val gameService = new GameRoutes(
-      authService,
-      new GameRoutesHandler(
-        new GameConciergeImpl(store, rt.unsafeRun(gameStreamsF), rt.unsafeRun(playerQueueF)),
-        store,
-        rt.unsafeRun(channelStore)
-      )
-    ).service
-
-    val service = Router[Task](
-      "/" -> gameService
-    ).orNotFound
-
-    val url = uri"/wsecho"
-    val request = Request[Task](uri = url)
-      .withHeaders(Headers.of(
-        Header("X-Requested-With", "XMLHttpRequest")
-      ))
-
-    "respond with echo" in {
-      pending
     }
   }
 }

@@ -94,15 +94,12 @@ object Services {
   ): Task[HttpRoutes[Task]] /*: Task[Kleisli[OptionT[Task, ?], Request[Task], Response[Task]]] */= {
     for {
       userChannels <- OutboundChannels.make()
-      gameStreams <- gameStreamsF
-      playerQueue <- RefM.make(List.empty[UUID])
+      gameStreams = List.empty
+      playerQueue = List.empty[UUID]
       gameStore = new PsqlGameStore(db)
+      concierge <- GameConciergeImpl(gameStore, gameStreams, playerQueue)
       gameService = new GameRoutesHandler(
-        new GameConciergeImpl(
-          gameStore,
-          gameStreams,
-          playerQueue
-        ),
+        concierge,
         gameStore,
         userChannels
       )
