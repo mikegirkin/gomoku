@@ -151,30 +151,28 @@ class GameRoutesHandler(
       }
     }
 
-    def executeSendOrder(sendOrder: List[OutboundWebsocketMessage]): Task[Unit] = {
+    def executeSendOrder(sendOrder: OutboundWebsocketMessage): Task[Unit] = {
       debug(s"Executing send order $sendOrder")
-      sendOrder
-        .map(m => userChannels.route(m.destinationUser, m.frame))
-        .sequence
-        .map { _ => () }
+      userChannels.route(sendOrder.destinationUser, sendOrder.frame)
     }
 
-    def inboundStream(token: AuthUser)(stream: Stream[Task, WebSocketFrame]): Stream[Task, Unit] = {
-      stream.evalMap(processFrame(token)).evalMap(executeSendOrder)
+    def processIncomingMessageStream(token: AuthUser, stream: Stream[Task, WebSocketFrame]): Stream[Task, OutboundWebsocketMessage] = {
+      stream
+        .evalMap(processFrame(token))
+        .flatMap(Stream.emits)
+        .evalTap(executeSendOrder)
     }
 
     for {
       outboundQueue <- userChannels.findOrCreateUserChannel(token)
       result <- {
-        WebSocketBuilder[Task].build(outboundQueue.dequeue, inboundStream(token))
+        WebSocketBuilder[Task].build(
+          outboundQueue.dequeue,
+          { inStream => processIncomingMessageStream(token, inStream).map(_ => ()) }
+        )
       }
     } yield {
       result
     }
   }
-
-  def handleGameSocketRequest(token: AuthUser, gameId: String): Task[Response[Task]] = {
-    ???
-  }
-
 }

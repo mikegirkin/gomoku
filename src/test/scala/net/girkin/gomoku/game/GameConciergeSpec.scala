@@ -21,8 +21,8 @@ class GameConciergeSpec extends AnyWordSpec with Matchers with Inside with MockF
     val user1Id = UUID.randomUUID()
     val user2Id = UUID.randomUUID()
 
-    "return JoinedQueue" when {
-      "received a request to join and there is no one in the queue" in {
+    "return JoinedQueue and JoinedGame correspondingly" when {
+      "received 2 requests to join game" in {
         val test = for {
           concierge <- GameConciergeImpl(gameStore, gameStreams, playerQueue)
           result1 <- concierge.joinRandomGame(user1Id)
