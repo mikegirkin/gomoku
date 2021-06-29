@@ -28,8 +28,6 @@ class GameRoutes(
 
   val gameRoutes = authService.secured(
     AuthedRoutes.of[AuthUser, Task] {
-      case GET -> Root / "debug" / "channels" as token => gameRoutesHandler.listChannels(token)
-      case POST -> Root / "join" as token => gameRoutesHandler.joinRandomGame(token)
       case GET -> Root / UUIDVar(gameId) as token => gameRoutesHandler.game(token, gameId)
       case GET -> Root as token => gameRoutesHandler.gameApp(token)
     }
@@ -43,3 +41,4 @@ class GameRoutes(
 
   val service = webSocketRoutes combineK gameRoutes
 }
+

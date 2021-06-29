@@ -2,12 +2,12 @@ package net.girkin.gomoku.controllers
 
 import java.time.{Instant, LocalDateTime}
 import java.util.UUID
-
 import cats.Id
 import net.girkin.gomoku.api.{GameRoutes, GameRoutesHandler, OutboundChannels}
 import net.girkin.gomoku.auth.AuthPrimitives
 import net.girkin.gomoku.game._
 import net.girkin.gomoku.users.User
+import net.girkin.gomoku.util.TestRuntime
 import net.girkin.gomoku.{Auth, AuthUser, Constants}
 import org.http4s._
 import org.http4s.server.Router
@@ -20,10 +20,7 @@ import zio.interop.catz._
 import zio.{IO, Ref, RefM, Task}
 
 class GameRoutesHandlerSpec extends AnyWordSpec
-  with Matchers with Inside with MockFactory {
-
-  implicit val ec = scala.concurrent.ExecutionContext.global
-  implicit val rt = zio.Runtime.default
+  with Matchers with Inside with MockFactory with TestRuntime {
 
   trait Environment {
     val channelStore = OutboundChannels.make()
@@ -66,4 +63,6 @@ class GameRoutesHandlerSpec extends AnyWordSpec
       result.status mustBe Status.Forbidden
     }
   }
+
 }
+

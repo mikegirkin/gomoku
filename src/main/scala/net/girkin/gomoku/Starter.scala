@@ -1,10 +1,9 @@
 package net.girkin.gomoku
 
-import java.util.concurrent.Executors
 import cats.effect._
-import net.girkin.gomoku.api.{GameRoutes, GameRoutesHandler, OutboundChannels, StaticRoutesHandler}
+import net.girkin.gomoku.api._
 import net.girkin.gomoku.auth.{AuthPrimitives, GoogleAuthImpl, SecurityConfiguration}
-import net.girkin.gomoku.game.{Game, GameConciergeImpl, GameStream, PsqlGameStore}
+import net.girkin.gomoku.game.{GameConciergeImpl, GameStore, GameStream, PsqlGameStore}
 import net.girkin.gomoku.users.{PsqlUserStore, UserStore}
 import org.http4s.HttpRoutes
 import org.http4s.client.Client
@@ -14,30 +13,36 @@ import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
 import org.http4s.server.middleware.Logger
 import org.http4s.syntax.all._
-import zio.clock.Clock
 import zio.interop.catz._
 import zio.interop.catz.implicits._
 import zio.{Task, ZIO, _}
 
 import java.util.UUID
+import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 
 object Starter extends App with Http4sDsl[Task] {
 
   private def buildForRuntime[A](implicit runtime: Runtime[A]): ZIO[A, Throwable, Unit]  = {
     val client = BlazeClientBuilder[Task](ExecutionContext.global).resource
-    val userStore = Services.userStore
-    val authService = Services.authService
-    val googleAuthService = Services.googleAuthService(userStore, client)
     val staticExecutionContext = scala.concurrent.ExecutionContext.fromExecutor(Executors.newFixedThreadPool(4))
     val staticService = new StaticRoutesHandler[Task](staticExecutionContext)
+    val db = new PsqlPooledDatabase()
+    val userStore: UserStore[Task] = new PsqlUserStore(db)
+    val authService = Services.authService
+    val googleAuthService = Services.googleAuthService(userStore, client)
+    val gameStore = new PsqlGameStore(db)
 
     val app: ZIO[A, Throwable, Unit] = for {
-      gameService <- Services.gameService(authService)
+      outboundChannels <- OutboundChannels.make()
+      gameService <- Services.gameService(authService, outboundChannels, gameStore)
+      debugService = new DebugRoutes(authService, outboundChannels, gameStore)
+
       httpRoutes = Router[Task](
         "/auth/google" -> googleAuthService.service,
         "/auth" -> authService.service,
         "/static" -> staticService.service,
+        "/debug" -> debugService.routes,
         "/healthcheck" -> HttpRoutes.of[Task] {
           case GET -> Root => Ok("HEALTHCHECK")
         },
@@ -80,8 +85,6 @@ object Starter extends App with Http4sDsl[Task] {
 
 object Services {
 
-  val db = new PsqlPooledDatabase()
-  val userStore: UserStore[Task] = new PsqlUserStore(db)
   val securityConfiguration = SecurityConfiguration(
     "270746747187-0ri8ig249up93ranj0l9qvpkhufaocv7.apps.googleusercontent.com",
     "WluSEQw9iNB2iIabeUDOf-no"
@@ -90,18 +93,18 @@ object Services {
   val gameStreamsF = RefM.make[List[GameStream]](List.empty[GameStream])
 
   def gameService(
-    authService: Auth[Task]
+    authService: Auth[Task],
+    outboundChannels: OutboundChannels,
+    gameStore: GameStore
   ): Task[HttpRoutes[Task]] /*: Task[Kleisli[OptionT[Task, ?], Request[Task], Response[Task]]] */= {
+    val gameStreams = List.empty
+    val playerQueue = List.empty[UUID]
     for {
-      userChannels <- OutboundChannels.make()
-      gameStreams = List.empty
-      playerQueue = List.empty[UUID]
-      gameStore = new PsqlGameStore(db)
       concierge <- GameConciergeImpl(gameStore, gameStreams, playerQueue)
       gameService = new GameRoutesHandler(
         concierge,
         gameStore,
-        userChannels
+        outboundChannels
       )
     } yield {
       new GameRoutes(authService, gameService).service

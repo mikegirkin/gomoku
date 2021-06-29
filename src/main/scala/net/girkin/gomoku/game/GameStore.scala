@@ -63,6 +63,7 @@ trait GameStore {
   def saveGameRecord(game: Game): IO[StoreError, Unit]
   def getGame(id: UUID): IO[StoreError, Option[Game]]
   def saveMove(game: Game, move: MoveAttempt): IO[StoreError, MoveAttempt]
+  def listGames(): IO[StoreError, List[GameStoreRecord]]
 }
 
 class PsqlGameStore(
@@ -198,5 +199,12 @@ class PsqlGameStore(
     )
 
     game.map { _.toGame() }
+  }
+
+  override def listGames(): IO[StoreError, List[GameStoreRecord]] = dbIO { implicit cn =>
+    SQL"""
+      select id, created_at, user1, user2, winning_condition, field_height, field_width, status
+      from games
+    """.as(gameStoreRecordParser.*)
   }
 }

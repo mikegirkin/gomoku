@@ -31,20 +31,6 @@ class GameRoutesHandler(
 ) extends Http4sDsl[Task]
     with FunctionalLogging {
 
-  def listChannels(token: AuthUser): Task[Response[Task]] = {
-    for {
-      channels <- userChannels.list()
-      channesData = channels.map {
-        case (user, queue) => s"User: ${user.userId}"
-      }.toList
-      html <- Ok(
-        views.html.debug.channels(channesData)
-      )
-    } yield {
-      html
-    }
-  }
-
   def gameApp(userToken: AuthUser): Task[Response[Task]] = {
     Ok(
       views.html.dashboard()
@@ -63,17 +49,6 @@ class GameRoutesHandler(
             Ok(game.asJson)
           }
       )
-  }
-
-  @deprecated
-  def joinRandomGame(token: AuthUser): Task[Response[Task]] = {
-    concierge
-      .joinRandomGame(token.userId)
-      .fold[Task[Response[Task]]](
-        error => BadRequest(""),
-        ok => Ok(ok.asJson)
-      )
-      .flatten
   }
 
   def handleSocketRequest(token: AuthUser): Task[Response[Task]] = {
