@@ -19,6 +19,9 @@ object IncomingGameMessage {
   final case object RequestJoinGame extends IncomingGameMessage
   final case object RequestLeaveGame extends IncomingGameMessage
   final case class RequestMove(row: Int, col: Int) extends IncomingGameMessage
+
+  def requestJoinGame: IncomingGameMessage = RequestJoinGame
+  def requestLeaveGame: IncomingGameMessage = RequestLeaveGame
 }
 
 class GameRoutesHandler(
@@ -80,7 +83,7 @@ class GameRoutesHandler(
       result <- {
         WebSocketBuilder[Task].build(
           outboundQueue.dequeue,
-          handler.gameWebSocketPipe(token, userChannels) andThen { _.map(_ => ()) }
+          handler.gameWebSocketPipe(token) andThen { _.map(_ => ()) }
         )
       }
     } yield {

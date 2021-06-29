@@ -10,7 +10,9 @@ import org.http4s.websocket.WebSocketFrame.{Close, Text}
 import zio.{IO, Task, ZIO}
 import zio.interop.catz._
 import ApiObjects._
-import net.girkin.gomoku.game.GameConcierge
+import net.girkin.gomoku.game.{GameConcierge, JoinGameSuccess}
+
+import java.util.UUID
 
 case class OutboundWebsocketMessage(
   destinationUser: AuthUser,
@@ -37,8 +39,7 @@ class GameWebSocketStreamHandler(
         .mapError(_ => WebSocketFrameHandlingError.BadRequest())
     }
 
-    val handleIncomingMessage
-    : Kleisli[IO[WebSocketFrameHandlingError, *], IncomingGameMessage, List[OutboundWebsocketMessage]] = Kleisli {
+    val handleIncomingMessage: Kleisli[IO[WebSocketFrameHandlingError, *], IncomingGameMessage, List[OutboundWebsocketMessage]] = Kleisli {
       case IncomingGameMessage.RequestJoinGame =>
         concierge
           .joinRandomGame(token.userId)
@@ -49,7 +50,15 @@ class GameWebSocketStreamHandler(
             },
             { joinGameSuccess =>
               val frame = WebSocketFrame.Text(joinGameSuccess.asJson.toString())
-              List(OutboundWebsocketMessage(token, frame))
+              joinGameSuccess match {
+                case JoinGameSuccess.JoinedQueue =>
+                  List(OutboundWebsocketMessage(token, frame))
+                case m @ JoinGameSuccess.JoinedGame(gameId, user1, user2) =>
+                  List(
+                    OutboundWebsocketMessage(AuthUser(user1), frame),
+                    OutboundWebsocketMessage(AuthUser(user2), frame)
+                  )
+              }
             }
           )
 
@@ -67,22 +76,25 @@ class GameWebSocketStreamHandler(
     }.merge
   }
 
-  private def processFrame(token: AuthUser)(frame: WebSocketFrame): Task[List[OutboundWebsocketMessage]] = {
+  private def handleCloseFrame(token: AuthUser, frame: Close): Task[List[OutboundWebsocketMessage]] = {
+    for {
+      _ <- userChannels.removeOutboundUserChannel(token)
+      allUsers <- userChannels.activeUsers()
+      result = allUsers.filterNot(user => user == token).map { user =>
+        OutboundWebsocketMessage(
+          user,
+          Text(s"User $token left the room")
+        )
+      }
+    } yield {
+      result
+    }
+  }
+
+  def processFrame(token: AuthUser)(frame: WebSocketFrame): Task[List[OutboundWebsocketMessage]] = {
     frame match {
       case frame @ Text(_, _) => handleTextFrame(token, frame)
-      case Close(_) =>
-        for {
-          _ <- userChannels.removeOutboundUserChannel(token)
-          allUsers <- userChannels.activeUsers()
-          result = allUsers.filterNot(user => user == token).map { user =>
-            OutboundWebsocketMessage(
-              user,
-              Text(s"User $token left the room")
-            )
-          }
-        } yield {
-          result
-        }
+      case frame @ Close(_) => handleCloseFrame(token, frame)
       case _ => Task.succeed(List.empty)
     }
   }
@@ -96,11 +108,10 @@ class GameWebSocketStreamHandler(
     }
   }
 
-  def gameWebSocketPipe(token: AuthUser, outboundChannels: OutboundChannels): Pipe[Task, WebSocketFrame, OutboundWebsocketMessage] = { stream =>
+  def gameWebSocketPipe(token: AuthUser): Pipe[Task, WebSocketFrame, OutboundWebsocketMessage] = { stream =>
     stream
       .evalMap(processFrame(token))
       .flatMap(Stream.emits)
       .evalTap(executeSendOrder)
   }
-
 }
