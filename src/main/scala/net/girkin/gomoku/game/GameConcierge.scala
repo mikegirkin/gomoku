@@ -2,6 +2,7 @@ package net.girkin.gomoku.game
 
 import cats.data.Kleisli
 import net.girkin.gomoku.AuthUser
+import net.girkin.gomoku.game.JoinGameError.AlreadyInGameOrQueue
 import zio.interop.catz._
 import zio.{IO, RefM, UIO, ZIO}
 
@@ -23,9 +24,13 @@ object JoinGameSuccess {
 
 
 sealed trait JoinGameError
-final case class UnexpectedJoinGameError (
-  reason: String
-) extends JoinGameError with CriticalFailure
+object JoinGameError {
+  final case object AlreadyInGameOrQueue extends JoinGameError
+  final case class UnexpectedJoinGameError(reason: String) extends JoinGameError
+
+  def alreadyInGameOrQueue: JoinGameError = AlreadyInGameOrQueue
+  def unexpectedJoinGameError(reason: String): JoinGameError = UnexpectedJoinGameError(reason)
+}
 
 case class LeaveGameSuccess(
   gameId: UUID
@@ -78,6 +83,13 @@ class GameConciergeImpl private (
     }
 
     for {
+      //return error if already in the queue or there is a game with the requester
+      currentQueue <- playerQueue.get
+      _ <- ZIO.fromEither(Either.cond(!currentQueue.contains(userId), (), JoinGameError.alreadyInGameOrQueue))
+      currentGames <- gameStore
+        .getActiveGameForPlayer(AuthUser(userId))
+        .mapError(err => JoinGameError.unexpectedJoinGameError(err.toString))
+      _ <- ZIO.fromEither(Either.cond(currentGames.isEmpty, (), AlreadyInGameOrQueue))
       //find another player
       playerIdToPairWith <- playerQueue.modify { waitingPlayerList =>
         ZIO.succeed {

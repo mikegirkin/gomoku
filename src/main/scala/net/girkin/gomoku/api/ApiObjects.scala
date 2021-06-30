@@ -28,7 +28,7 @@ object ApiObjects {
   implicit val gameEncoder: Encoder[Game] = deriveConfiguredEncoder[Game]
 
   implicit val joinGameSuccessCodec: Codec[JoinGameSuccess] = deriveConfiguredCodec[JoinGameSuccess]
-  implicit val joinGameErrorEncoder: Encoder[JoinGameError] = deriveConfiguredEncoder[JoinGameError]
+  implicit val joinGameErrorCodec: Codec[JoinGameError] = deriveConfiguredCodec[JoinGameError]
 
   implicit val incomingGameMessageCodec: Codec[IncomingGameMessage] = deriveConfiguredCodec[IncomingGameMessage]
 

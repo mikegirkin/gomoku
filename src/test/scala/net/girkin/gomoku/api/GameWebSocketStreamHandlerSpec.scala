@@ -1,15 +1,16 @@
 package net.girkin.gomoku.api
 
-import io.circe.Encoder
+import io.circe.{Decoder, Encoder}
 import io.circe.parser.decode
 import io.circe.syntax._
 import net.girkin.gomoku.AuthUser
 import net.girkin.gomoku.api.ApiObjects._
-import net.girkin.gomoku.game.{GameConciergeImpl, GameStore, JoinGameSuccess}
+import net.girkin.gomoku.game.{GameConciergeImpl, GameStore, JoinGameError, JoinGameSuccess}
 import org.http4s.websocket.WebSocketFrame
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import zio.ZIO
 
 import java.util.UUID
 
@@ -18,8 +19,19 @@ class GameWebSocketStreamHandlerSpec extends AnyWordSpec with Matchers with Mock
   implicit val ec = scala.concurrent.ExecutionContext.global
   implicit val rt = zio.Runtime.default
 
-  private def toWebsocketTextFrame[A : Encoder](value: A) = {
+  private def toWebsocketTextFrame[A : Encoder](value: A): WebSocketFrame.Text = {
     WebSocketFrame.Text(value.asJson.toString())
+  }
+
+  private def deserializeResponseFrames[A : Decoder](outboundWebsocketMessage: OutboundWebsocketMessage*): Seq[A] = {
+    outboundWebsocketMessage
+      .map(_.frame).collect {
+      case f @ WebSocketFrame.Text(_) => f.str
+    }.map { str =>
+      decode[A](str)
+    }.collect {
+      case Right(x) => x
+    }
   }
 
   "Stream handler" should {
@@ -27,6 +39,7 @@ class GameWebSocketStreamHandlerSpec extends AnyWordSpec with Matchers with Mock
       val authUser2 = AuthUser(UUID.randomUUID())
 
       val gameStore = mock[GameStore]
+
       val gameWebSocketStreamHandlerF = for {
         concierge <- GameConciergeImpl(gameStore, List.empty, List.empty)
         userChannel <- OutboundChannels.make()
@@ -34,42 +47,62 @@ class GameWebSocketStreamHandlerSpec extends AnyWordSpec with Matchers with Mock
         new GameWebSocketStreamHandler(concierge, userChannel)
       }
 
-      val gameWebSocketStreamHandler = rt.unsafeRun(gameWebSocketStreamHandlerF)
-
-      "return JoinQueue when received first join request" in {
-        val joinGameRequest = IncomingGameMessage.requestJoinGame
-        val frame = WebSocketFrame.Text(joinGameRequest.asJson.toString())
-        val resultF = gameWebSocketStreamHandler.processFrame(authUser1)(frame)
-        val result = rt.unsafeRun(resultF)
-
-        val expectedFrame = toWebsocketTextFrame(JoinGameSuccess.joinedQueue)
-        result should have size (1)
-        result should contain(OutboundWebsocketMessage(authUser1, expectedFrame))
-      }
-
       "return JoinedGame to both users when received second join request" in {
-        val joinGameRequest = IncomingGameMessage.requestJoinGame
-        val frame = WebSocketFrame.Text(joinGameRequest.asJson.toString())
-        val resultF = gameWebSocketStreamHandler.processFrame(authUser2)(frame)
-        val result = rt.unsafeRun(resultF)
+        (gameStore.getActiveGameForPlayer _).expects(authUser1)
+          .returns(ZIO.succeed(Option.empty))
+        (gameStore.getActiveGameForPlayer _).expects(authUser2)
+          .returns(ZIO.succeed(Option.empty))
 
-        result should have size (2)
-        result.map(_.destinationUser) should contain theSameElementsAs List(authUser1, authUser2)
-
-        //Deserialize and extract users from the contents. GameId is irrelevant
-        val contents = result
-          .map(_.frame).collect {
-          case f @ WebSocketFrame.Text(_) => f.str
-        }.map { str =>
-          decode[JoinGameSuccess](str)
-        }.collect {
-          case Right(JoinGameSuccess.JoinedGame(_, user1, user2)) => (user1, user2)
+        val frame = toWebsocketTextFrame(IncomingGameMessage.requestJoinGame)
+        val resultF = for {
+          gameWebSocketStreamHandler <- gameWebSocketStreamHandlerF
+          result1 <- gameWebSocketStreamHandler.processFrame(authUser1)(frame)
+          result2 <- gameWebSocketStreamHandler.processFrame(authUser2)(frame)
+        } yield {
+          (result1, result2)
         }
 
-        contents should contain theSameElementsAs(List(
+        val (result1, result2) = rt.unsafeRun(resultF)
+
+        result1 should have size (1)
+        val contents1 = deserializeResponseFrames[JoinGameSuccess](result1:_*)
+        contents1.head shouldBe JoinGameSuccess.joinedQueue
+
+        result2 should have size (2)
+        result2.map(_.destinationUser) should contain theSameElementsAs List(authUser1, authUser2)
+        val contents2 = deserializeResponseFrames[JoinGameSuccess](result2:_*)
+          .collect {
+            case JoinGameSuccess.JoinedGame(_, user1, user2) => (user1, user2)
+          }
+
+        contents2 should contain theSameElementsAs(List(
           (authUser1.userId, authUser2.userId),
           (authUser1.userId, authUser2.userId)
         ))
+      }
+
+      "return BadRequest if same user tries to join second time" in {
+        (gameStore.getActiveGameForPlayer _).expects(authUser1)
+          .returns(ZIO.succeed(Option.empty))
+
+        val frame = toWebsocketTextFrame(IncomingGameMessage.requestJoinGame)
+        val testF = for {
+          gameWebSocketHandler <- gameWebSocketStreamHandlerF
+          result1 <- gameWebSocketHandler.processFrame(authUser1)(frame)
+          result2 <- gameWebSocketHandler.processFrame(authUser1)(frame)
+        } yield {
+          (result1, result2)
+        }
+
+        val (result1, result2) = rt.unsafeRun(testF)
+
+        result1 should have size(1)
+        val contents1 = deserializeResponseFrames[JoinGameSuccess](result1.head)
+        contents1.head shouldBe JoinGameSuccess.joinedQueue
+
+        result2 should have size(1)
+        val contents2 = deserializeResponseFrames[JoinGameError](result2.head)
+        contents2.head shouldBe JoinGameError.AlreadyInGameOrQueue
       }
   }
 }
