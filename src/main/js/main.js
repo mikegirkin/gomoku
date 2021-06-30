@@ -4,5 +4,9 @@ import GameApp from '@/GameApp'
 Vue.component('game-app', GameApp);
 
 new Vue({
-    el: '#app'
+    el: '#app',
+    template: "<game-app> </game-app>",
+    data: {
+        conn: null
+    }
 });

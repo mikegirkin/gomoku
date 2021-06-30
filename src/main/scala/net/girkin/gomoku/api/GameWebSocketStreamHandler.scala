@@ -112,6 +112,8 @@ class GameWebSocketStreamHandler(
     stream
       .evalMap(processFrame(token))
       .flatMap(Stream.emits)
-      .evalTap(executeSendOrder)
+      .evalTap { outboundMessage =>
+        info(s"WEBSOCKET outbound: ${outboundMessage.toString}")
+      }.evalTap(executeSendOrder)
   }
 }

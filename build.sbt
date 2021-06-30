@@ -9,7 +9,7 @@ version := "1.0-SNAPSHOT"
 scalaVersion := "2.13.6"
 scalacOptions ++= Seq("-deprecation", "-feature")
 
-val http4sVersion = "0.21.24"
+val http4sVersion = "0.21.3"
 val circeVersion = "0.12.2"
 val LogbackVersion = "1.2.3"
 val zioVersion = "1.0.9"
