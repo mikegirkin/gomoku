@@ -101,13 +101,13 @@ object Services {
     val playerQueue = List.empty[UUID]
     for {
       concierge <- GameConciergeImpl(gameStore, gameStreams, playerQueue)
-      gameService = new GameRoutesHandler(
+      gameRoutesHandler = new GameRoutesHandler(
         concierge,
         gameStore,
         outboundChannels
       )
     } yield {
-      new GameRoutes(authService, gameService).service
+      new GameRoutes(authService, gameRoutesHandler).service
     }
   }
 

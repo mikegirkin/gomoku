@@ -1,51 +1,22 @@
 package net.girkin.gomoku.game
 
 import cats.data.Kleisli
-import net.girkin.gomoku.AuthUser
-import net.girkin.gomoku.game.JoinGameError.AlreadyInGameOrQueue
+import net.girkin.gomoku.api.JoinGameError.AlreadyInGameOrQueue
+import net.girkin.gomoku.api.LeaveGameError.{NoSuchGameError, UserHasNoActiveGame}
+import net.girkin.gomoku.game.GomokuGameError.BadRequest
+import net.girkin.gomoku.game.GomokuGameResponse.StateChanged
+import net.girkin.gomoku.{AuthUser, CriticalException}
+import net.girkin.gomoku.api.{GameStateChanged, JoinGameError, JoinGameSuccess, LeaveGameError, MoveAttemptError}
 import zio.interop.catz._
 import zio.{IO, RefM, UIO, ZIO}
+import net.girkin.gomoku.game.GomokuGameRequest.MakeMove
 
 import java.util.UUID
 
-
-sealed trait JoinGameSuccess
-object JoinGameSuccess {
-  final case object JoinedQueue extends JoinGameSuccess
-  final case class JoinedGame(
-    gameId: UUID,
-    player1: UUID,
-    player2: UUID
-  ) extends JoinGameSuccess
-
-  def joinedQueue: JoinGameSuccess = JoinedQueue
-  def joinedGame(gameId: UUID, player1: UUID, player2: UUID): JoinGameSuccess = JoinedGame(gameId, player1, player2)
-}
-
-
-sealed trait JoinGameError
-object JoinGameError {
-  final case object AlreadyInGameOrQueue extends JoinGameError
-  final case class UnexpectedJoinGameError(reason: String) extends JoinGameError
-
-  def alreadyInGameOrQueue: JoinGameError = AlreadyInGameOrQueue
-  def unexpectedJoinGameError(reason: String): JoinGameError = UnexpectedJoinGameError(reason)
-}
-
-case class LeaveGameSuccess(
-  gameId: UUID
-)
-
-sealed trait LeaveGameError extends Product with Serializable
-object LeaveGameError {
-  case object NoSuchGameError extends LeaveGameError
-  final case class UserNotInThisGame(gameId: UUID, playerId: UUID) extends LeaveGameError
-  final case class StoreError(error: GameStore.StoreError) extends LeaveGameError
-}
-
 trait GameConcierge {
   def joinRandomGame(userId: UUID): IO[JoinGameError, JoinGameSuccess]
-  def leaveGame(user: AuthUser): IO[LeaveGameError, LeaveGameSuccess]
+  def leaveGame(user: AuthUser): IO[LeaveGameError, GameStateChanged]
+  def attemptMove(user: AuthUser, row: Int, col: Int): IO[MoveAttemptError, GameStateChanged]
 }
 
 class GameConciergeImpl private (
@@ -108,36 +79,55 @@ class GameConciergeImpl private (
     }
   }
 
-  override def leaveGame(user: AuthUser): IO[LeaveGameError, LeaveGameSuccess] = {
-    val resultF: IO[LeaveGameError, LeaveGameSuccess] = for {
-      gameOpt <- gameStore.getActiveGameForPlayer(user).mapError(storeError => LeaveGameError.StoreError(storeError))
-      result <- gameOpt match {
-        case Some(game) => game.status match {
-          case Active(awaitingMoveFrom) =>
-            val playerNumberOpt = game.getPlayerNumber(user.userId)
-            playerNumberOpt.map {
-              playerNumber =>
-                val newGameState = game.playerConceded(playerNumber)
-                gameStore.saveGameRecord(newGameState).bimap[LeaveGameError, LeaveGameSuccess](
-                  err => LeaveGameError.StoreError(err),
-                  _ => LeaveGameSuccess(newGameState.gameId)
-                )
-            }.getOrElse {
-              IO.fail[LeaveGameError](LeaveGameError.UserNotInThisGame(game.gameId, user.userId))
-            }
-          case Finished(reason) =>
-            IO.fail[LeaveGameError](LeaveGameError.NoSuchGameError)
+  override def leaveGame(user: AuthUser): IO[LeaveGameError, GameStateChanged] = {
+    for {
+      game <- gameStore
+        .getActiveGameForPlayer(user)
+        .orDieWith(CriticalException.DatabaseError)
+        .flatMap {
+          case Some(value) => ZIO.succeed(value)
+          case None => ZIO.fail(UserHasNoActiveGame)
         }
-        case None => IO.fail[LeaveGameError](LeaveGameError.NoSuchGameError)
-      }
+      gameStream <- getGameStream(game.gameId)
+        .flatMap {
+          case Some(stream) => ZIO.succeed(stream)
+          case None => ZIO.fail(NoSuchGameError)
+        }
+      result <- gameStream.handleConcede(GomokuGameRequest.Concede(user.userId, game.gameId))
+        .mapBoth(
+          { case BadRequest(gameId, reason) => LeaveGameError.BadRequest(user.userId, gameId, reason) },
+          { case StateChanged(gameId) => GameStateChanged(gameId, game.player1, game.player2) }
+        )
     } yield {
       result
     }
-
-    resultF
   }
 
-  def getGameStream(gameId: UUID): IO[Nothing, Option[GameStream]] = {
+  override def attemptMove(user: AuthUser, row: Int, col: Int): IO[MoveAttemptError, GameStateChanged] = {
+    for {
+      game <- gameStore
+        .getActiveGameForPlayer(user)
+        .orDieWith(CriticalException.DatabaseError)
+        .flatMap {
+          case Some(value) => ZIO.succeed(value)
+          case None => ZIO.fail(MoveAttemptError.UserHasNoActiveGame)
+        }
+      gameStream <- getGameStream(game.gameId)
+        .flatMap {
+          case Some(stream) => ZIO.succeed(stream)
+          case None => ZIO.fail(MoveAttemptError.NoSuchGameError)
+        }
+      result <- gameStream.handleMakeMove(MakeMove(UUID.randomUUID(), user.userId, game.gameId, row, col))
+        .mapBoth(
+          { error => MoveAttemptError.impossibleMove },
+          { case GomokuGameResponse.StateChanged(gameId) => GameStateChanged(gameId, game.player1, game.player2) }
+        )
+    } yield {
+      result
+    }
+  }
+
+  private def getGameStream(gameId: UUID): IO[Nothing, Option[GameStream]] = {
     for {
       streams <- gameStreams.get
     } yield {

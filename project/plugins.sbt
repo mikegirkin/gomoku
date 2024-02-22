@@ -1,3 +1,2 @@
 addSbtPlugin("com.typesafe.sbt"  % "sbt-twirl"  % "1.5.0")
-addSbtPlugin("org.jmotor.sbt" % "sbt-dependency-updates" % "1.2.1")
-
+addSbtPlugin("com.timushev.sbt" % "sbt-updates" % "0.6.0")

@@ -17,16 +17,6 @@ import zio.interop.catz._
 import java.util.UUID
 import scala.concurrent.duration.DurationInt
 
-sealed trait IncomingGameMessage
-object IncomingGameMessage {
-  final case object RequestJoinGame extends IncomingGameMessage
-  final case object RequestLeaveGame extends IncomingGameMessage
-  final case class RequestMove(row: Int, col: Int) extends IncomingGameMessage
-
-  def requestJoinGame: IncomingGameMessage = RequestJoinGame
-  def requestLeaveGame: IncomingGameMessage = RequestLeaveGame
-}
-
 class GameRoutesHandler(
     concierge: GameConcierge,
     gameStore: GameStore,

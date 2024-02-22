@@ -5,7 +5,7 @@ import io.circe.parser.decode
 import io.circe.syntax._
 import net.girkin.gomoku.AuthUser
 import net.girkin.gomoku.api.ApiObjects._
-import net.girkin.gomoku.game.{GameConciergeImpl, GameStore, JoinGameError, JoinGameSuccess}
+import net.girkin.gomoku.game.{GameConciergeImpl, GameStore}
 import org.http4s.websocket.WebSocketFrame
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.matchers.should.Matchers

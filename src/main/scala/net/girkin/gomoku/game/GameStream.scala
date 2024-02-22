@@ -4,77 +4,80 @@ import java.util.UUID
 import fs2.{Pipe, Stream}
 import zio.{IO, RefM, UIO}
 
-sealed trait GomokuRequest {
+sealed trait GomokuGameRequest {
   def userId: UUID
+
   def gameId: UUID
 }
 
-object GomokuRequest {
+object GomokuGameRequest {
   final case class MakeMove(
     id: UUID,
     userId: UUID,
     gameId: UUID,
     row: Int,
     column: Int
-  ) extends GomokuRequest
+  ) extends GomokuGameRequest
 
   final case class Concede(
     userId: UUID,
     gameId: UUID
-  ) extends GomokuRequest
+  ) extends GomokuGameRequest
 
-  def makeMove(id: UUID, userId: UUID, gameId: UUID, row: Int, column: Int): GomokuRequest =
+  def makeMove(id: UUID, userId: UUID, gameId: UUID, row: Int, column: Int): GomokuGameRequest =
     MakeMove(id, userId, gameId, row, column)
 
-  def concede(userId: UUID, gameId: UUID): GomokuRequest = Concede(userId, gameId)
+  def concede(userId: UUID, gameId: UUID): GomokuGameRequest = Concede(userId, gameId)
 }
 
 
-sealed trait GomokuResponse
-object GomokuResponse {
-  final case class StateChanged(gameId: UUID) extends GomokuResponse
+sealed trait GomokuGameResponse
 
-  def stateChanged(gameId: UUID): GomokuResponse = StateChanged(gameId)
+object GomokuGameResponse {
+  final case class StateChanged(gameId: UUID) extends GomokuGameResponse
+  def stateChanged(gameId: UUID): GomokuGameResponse = StateChanged(gameId)
 }
 
-sealed trait GomokuError
-object GomokuError {
-  final case class GameIsFull private (gameId: UUID) extends GomokuError
-  final case class PlayerPresent private (gameId: UUID, userId: UUID) extends GomokuError
-  final case class BadMoveRequest private (error: MoveError, gameId: UUID, userId: UUID) extends GomokuError
-  final case class InternalError private (reason: String) extends GomokuError
-  final case class BadRequest private (gameId: UUID, reason: String) extends GomokuError
+sealed trait GomokuGameError
 
-  def badMoveRequest(error: MoveError, gameId: UUID, userId: UUID): GomokuError = BadMoveRequest(error, gameId, userId)
-  def internalError(reason: String): GomokuError = InternalError(reason)
-  def gameIsFull(gameId: UUID): GomokuError = GameIsFull(gameId)
-  def playerPresent(gameId: UUID, userId: UUID): GomokuError = PlayerPresent(gameId, userId)
-  def badRequest(gameId: UUID, reason: String): GomokuError = BadRequest(gameId, reason)
+object GomokuGameError {
+  final case class GameIsFull private(gameId: UUID) extends GomokuGameError
+  final case class PlayerPresent private(gameId: UUID, userId: UUID) extends GomokuGameError
+  final case class BadMoveRequest private(error: MoveError, gameId: UUID, userId: UUID) extends GomokuGameError
+  final case class InternalError private(reason: String) extends GomokuGameError
+  final case class BadRequest private(gameId: UUID, reason: String) extends GomokuGameError
+
+  def badMoveRequest(error: MoveError, gameId: UUID, userId: UUID): GomokuGameError = BadMoveRequest(error, gameId, userId)
+
+  def internalError(reason: String): GomokuGameError = InternalError(reason)
+
+  def gameIsFull(gameId: UUID): GomokuGameError = GameIsFull(gameId)
+
+  def playerPresent(gameId: UUID, userId: UUID): GomokuGameError = PlayerPresent(gameId, userId)
+
+  def badRequest(gameId: UUID, reason: String): GomokuGameError = BadRequest(gameId, reason)
 }
 
-/***
+/** *
  * This class represents a stream of requests/responses that goes through a particular game instance
  * This stream is intended to exist only when the game exist in memory
+ *
  * @param gameStore
  * @param gameRef
  */
-class GameStream private (
+class GameStream private(
   gameStore: GameStore,
   gameRef: RefM[Game],
   val gameId: UUID
 ) {
 
-  import GomokuRequest._
-  import GomokuError._
-  import GomokuResponse._
+  import GomokuGameRequest._
+  import GomokuGameError._
+  import GomokuGameResponse._
 
-  def getGame: UIO[Game] = {
-    gameRef.get
-  }
+  def handleMakeMove(command: MakeMove): IO[GomokuGameError, GomokuGameResponse] = {
 
-  private def handleMakeMove(command: MakeMove): IO[GomokuError, GomokuResponse] = {
-
-    def updateGameAndSaveMove(current: Game): IO[GomokuError, Game] = {
+    def updateGameAndSaveMove(current: Game): IO[GomokuGameError, Game] = {
       val move = MoveAttempt(command.row, command.column, command.userId)
 
       current.makeMove(move).fold(
@@ -89,12 +92,13 @@ class GameStream private (
       )
     }
 
-    gameRef.updateAndGet(updateGameAndSaveMove).map { newGameState =>
-      stateChanged(newGameState.gameId)
-    }
+    gameRef.updateAndGet(updateGameAndSaveMove)
+      .map { newGameState =>
+        stateChanged(newGameState.gameId)
+      }
   }
 
-  private def handleConcede(request: Concede): IO[GomokuError, GomokuResponse] = {
+  def handleConcede(request: Concede): IO[BadRequest, GomokuGameResponse] = {
     gameRef.modify { game =>
       val newStateOpt = for {
         playerNumber <- game.getPlayerNumber(request.userId)
@@ -108,28 +112,11 @@ class GameStream private (
           StateChanged(state.gameId) -> state
         }
       ).mapError { _ =>
-        GomokuError.badRequest(
+        GomokuGameError.BadRequest(
           game.gameId,
           reason = s"User ${request.userId} is not in the game ${game.gameId}"
         )
       }
-    }
-  }
-
-  private def processRequest(req: GomokuRequest): IO[GomokuError, GomokuResponse] = {
-    req match {
-      case m @ MakeMove(_, _, _, _, _) => handleMakeMove(m)
-      case m @ Concede(_, _) => handleConcede(m)
-    }
-  }
-
-  val pipe: Pipe[UIO, GomokuRequest, Either[GomokuError, GomokuResponse]] = {
-    (in: Stream[UIO, GomokuRequest]) => {
-      in.evalMap( x =>
-        processRequest(x).either
-      ).flatMap(
-        result => Stream.emit(result)
-      )
     }
   }
 }

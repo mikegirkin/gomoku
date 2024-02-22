@@ -12,13 +12,13 @@ scalacOptions ++= Seq("-deprecation", "-feature")
 val http4sVersion = "0.21.3"
 val circeVersion = "0.12.2"
 val LogbackVersion = "1.2.3"
-val zioVersion = "1.0.9"
+val zioVersion = "1.0.12"
 
 libraryDependencies ++= Seq(
-  "org.playframework.anorm" %% "anorm"          % "2.6.5",
-  "org.playframework.anorm" %% "anorm-postgres" % "2.6.5",
-  "org.postgresql"           % "postgresql"     % "42.2.12",
-  "com.mchange"              % "c3p0"           % "0.9.5.2",
+  "org.playframework.anorm" %% "anorm"          % "2.6.10",
+  "org.playframework.anorm" %% "anorm-postgres" % "2.6.10",
+  "org.postgresql"           % "postgresql"     % "42.2.24",
+  "com.mchange"              % "c3p0"           % "0.9.5.5",
 
   "org.http4s"      %% "http4s-dsl"            % http4sVersion,
   "org.http4s"      %% "http4s-blaze-client"   % http4sVersion,
@@ -36,11 +36,10 @@ libraryDependencies ++= Seq(
   "io.circe"        %% "circe-generic-extras"  % circeVersion,
   //"io.circe"        %% "circe-java8"           % circeVersion,
 //  "io.circe"        %% "circe-shapes"          % circeVersion,
-  "org.reactormonk" %% "cryptobits"            % "1.3",
-  "com.pauldijou"   %% "jwt-circe"             % "4.3.0",
+  "org.reactormonk" %% "cryptobits"            % "1.3.1",
+  "com.pauldijou"   %% "jwt-circe"             % "5.0.0",
 
-  "org.scalatest"   %% "scalatest"              % "3.1.1" % Test,
-  "org.scalamock"   %% "scalamock"              % "4.4.0" % Test,
+  "org.scalatest"   %% "scalatest"              % "3.2.9" % Test,
   "org.http4s"      %% "http4s-jdk-http-client" % "0.3.7" % Test
 )
 

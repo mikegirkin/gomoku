@@ -10,9 +10,19 @@ import org.http4s.websocket.WebSocketFrame.{Close, Text}
 import zio.{IO, Task, ZIO}
 import zio.interop.catz._
 import ApiObjects._
-import net.girkin.gomoku.game.{GameConcierge, JoinGameSuccess}
+import net.girkin.gomoku.game.GameConcierge
 
 import java.util.UUID
+
+sealed trait IncomingGameMessage
+object IncomingGameMessage {
+  final case object RequestJoinGame extends IncomingGameMessage
+  final case object RequestLeaveGame extends IncomingGameMessage
+  final case class RequestMove(row: Int, col: Int) extends IncomingGameMessage
+
+  def requestJoinGame: IncomingGameMessage = RequestJoinGame
+  def requestLeaveGame: IncomingGameMessage = RequestLeaveGame
+}
 
 case class OutboundWebsocketMessage(
   destinationUser: AuthUser,
@@ -62,8 +72,24 @@ class GameWebSocketStreamHandler(
             }
           )
 
-      case IncomingGameMessage.RequestLeaveGame      => ??? //find active game, request leave
-      case IncomingGameMessage.RequestMove(row, col) => ??? // find active game, pass move request to it
+      case IncomingGameMessage.RequestLeaveGame =>
+        concierge
+          .leaveGame(token)
+          .fold (
+            error => List(OutboundWebsocketMessage(token, WebSocketFrame.Text(error.asJson.toString()))),
+            { gameStateChanged =>
+                val frame = WebSocketFrame.Text(gameStateChanged.asJson.toString())
+                List(
+                  OutboundWebsocketMessage(AuthUser(gameStateChanged.user1), frame),
+                  OutboundWebsocketMessage(AuthUser(gameStateChanged.user2), frame)
+                )
+            }
+          )
+
+      case IncomingGameMessage.RequestMove(row, col) =>
+        concierge
+          .attemptMove(token, row, col)
+          ???
     }
 
     val result = (deserializeFrame andThen handleIncomingMessage).run(frame)
